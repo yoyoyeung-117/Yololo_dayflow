@@ -12,7 +12,7 @@ fs.writeFileSync(path.join(root, 'Contents/Info.plist'), `<?xml version="1.0" en
 <key>NSCalendarsUsageDescription</key><string>Dayflow reads your day and saves approved schedule changes.</string>
 </dict></plist>`);
 for (const [cmd, args] of [
-  ['xcrun', ['swiftc', '-O', 'native/CalendarBridge.swift', '-o', path.join(root, 'Contents/MacOS/DayflowCalendar'), '-framework', 'EventKit', '-framework', 'AppKit']],
+  ['xcrun', ['swiftc', '-O', 'native/CalendarBridge.swift', '-o', path.join(root, 'Contents/MacOS/DayflowCalendar'), '-framework', 'EventKit', '-framework', 'AppKit', '-framework', 'MapKit']],
   ['codesign', ['--force', '--sign', '-', '--identifier', 'local.dayflow.calendar', root]],
 ]) { const result = spawnSync(cmd, args, { stdio: 'inherit' }); if (result.status !== 0) process.exit(result.status || 1); }
 console.log('Built Dayflow Calendar helper.');

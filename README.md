@@ -1,18 +1,18 @@
-# Dayflow
+# DayMade
 
-Dayflow spots a likely delay, asks for your approval privately on **Telegram**, sends meeting proposals through **Discord and Zoom Team Chat**, collects replies, and reports back to you.
+DayMade spots a likely delay, asks for your approval privately on **Telegram**, sends meeting proposals through **Discord and Zoom Team Chat**, collects replies, and reports back to you.
 
 **Open the app: http://localhost:4317 → My calendar.**
 
-Your existing Telegram owner pairing and Ollama settings are retained. WhatsApp and Twilio have been removed. The open-weight model **Qwen3 4B** runs locally through Ollama.
+Your existing Telegram owner pairing and Ollama settings are retained. WhatsApp and Twilio have been removed. The open-weight model **Qwen3.6 35B** runs locally through Ollama.
 
 ## The platform roles
 
 | Platform | Who communicates | Purpose |
 | --- | --- | --- |
-| Telegram | You ↔ Dayflow | Private suggestions, approval buttons, progress and results |
-| Discord | You and coworkers, with Dayflow coordinating | Proposals and coworker replies in the selected team channel |
-| Zoom Team Chat | You and coworkers, with Dayflow coordinating | Proposals and replies in existing contact conversations |
+| Telegram | You ↔ DayMade | Private suggestions, approval buttons, progress and results |
+| Discord | You and coworkers, with DayMade coordinating | Proposals and coworker replies in the selected team channel |
+| Zoom Team Chat | You and coworkers, with DayMade coordinating | Proposals and replies in existing contact conversations |
 
 Coworkers do not join the Telegram bot. Participant destinations are restricted to Discord and Zoom in both the interface and API.
 
@@ -21,21 +21,35 @@ Coworkers do not join the Telegram bot. Participant destinations are restricted 
 1. In **Connections → Telegram**, check your saved owner connection. This is your private channel with the agent.
 2. Connect **Discord** or **Zoom Team Chat** using the instructions below. You can use either or both.
 3. Under **Your meeting participants**, add coworkers with a Discord user ID or Zoom contact email. Choose **Include in meeting** for the people to contact, then **Save coworkers**.
-4. Select **Live messages**, advance the lunch scenario, and review the proposed time and recipients on Telegram.
-5. Tap **Approve & send to coworkers**. Dayflow sends the approved request through Discord/Zoom.
-6. Coworkers reply there using a direct reply or the current `#DF-…` reference. Dayflow records their answers and reports back to you privately on Telegram.
+4. In **My calendar**, connect Apple Calendar, allow a future event to be rescheduled, and select the friends who attend it.
+5. In **My calendar** or **Plan my day**, click **Change time & ask friends** on the event, enter a new start time in **Move a meeting**, then click **Review meeting change**. Review the actual before/after times and recipients. You can also report an overrun in a current event.
+6. Approve on Telegram or the Mac. DayMade coordinates with those friends, checks Calendar before alternatives, and saves once everyone agrees.
+
 
 If you have not paired the owner yet, use the verified **@BotFather** in Telegram, send `/newbot`, and paste its token into Connections. Click **Save & pair Telegram** and open the private owner pairing link. Only you use this pairing link. Use a dedicated bot without an existing webhook or another polling process.
+
+## Real venues, maps and reminders
+
+The old practice URL opens the real Calendar planner. Seeded scenario creation and simulated replies return HTTP 410. Events and venues are never invented, and missing locations remain visibly missing.
+
+1. Add the actual venue to each in-person event in Apple Calendar. A selected map location supplies coordinates; otherwise Apple Maps searches the venue text. Check the matched places on the map, particularly for ambiguous addresses.
+2. In **Travel & meeting reminders**, choose **Use my location** (this Mac browser’s permission) or enter your current full address. Location is a snapshot, not background iPhone tracking; update it when moving or after 30 minutes.
+3. Select **Driving / taxi** or **Walking**, and enter your extra buffer. The helper requests an actual Apple Maps route and map snapshot; no API key is required. The visible route opens in Apple Maps for navigation. MTR/bus estimates are not implemented: choose transit in Apple Maps instead. Taxi waiting and parking belong in your buffer.
+4. Enable **Remind me on Telegram**. While the Mac and server run, DayMade refreshes Calendar and the route about once per minute. It compares travel plus buffer with the real next in-person meeting. Old or imprecise origins, missing venues and failed routes produce no fictional ETA.
+5. A late-arrival warning offers **Find a later time & review with me** for flexible personal events. DayMade rereads Calendar and Maps, finds a free slot after estimated arrival, and sends an approval card. Only approval contacts the event’s selected friends. Negotiation preserves the arrival lower bound, duration and fixed appointments.
+6. Online events show their actual Zoom/Meet/Teams/Webex joining link, extracted from the event URL, location or notes. Full notes are not exposed. Telegram sends one reminder within ten minutes of the start; the DayMade calendar also shows the link and countdown. This does not add or edit Apple Calendar alarms.
+
+**Disconnect travel & reminders** clears the stored origin and pending travel buttons. Disconnecting Calendar or Telegram also disables this monitoring. Calendar access may need **Allow Full Access** again after rebuilding the signed native helper. Reminder failures are visible and are not blindly retried.
 
 ## Add Discord
 
 Discord delivery uses a bot in one regular server text channel. It mentions each selected coworker in a separate message. **All members with access to that channel can see these proposals.**
 
 1. Open [Discord Developer Portal](https://discord.com/developers/applications) and create an application.
-2. On **Bot**, copy/reset the **bot token**. Enable **Message Content Intent** so Dayflow can read normal replies.
+2. On **Bot**, copy/reset the **bot token**. Enable **Message Content Intent** so DayMade can read normal replies.
 3. Under **Installation**, select **Guild Install**, add the `bot` scope, and grant **View Channels**, **Send Messages**, and **Read Message History**. Install the bot into a server you manage.
 4. In Discord, enable **User Settings → Advanced → Developer Mode**. Right-click your dedicated text channel and choose **Copy Channel ID**.
-5. In Dayflow **Connections → Discord**, enter the token and channel ID; click **Save & connect Discord**. This checks bot identity and channel history access, and enables Message Content Intent through Discord’s application API when available. If Discord requires approval for that intent, setup reports the required action. No channel message is sent.
+5. In DayMade **Connections → Discord**, enter the token and channel ID; click **Save & connect Discord**. This checks bot identity and channel history access, and enables Message Content Intent through Discord’s application API when available. If Discord requires approval for that intent, setup reports the required action. No channel message is sent.
 6. Add a coworker with platform **Discord**. Right-click that person in Discord, copy their **User ID**, paste it into their row, and save.
 7. After your approval, they receive a mention in that channel. They can select **Reply** on their proposal and type `yes`, `no`, or an alternative time. **No @bot mention is needed, and the reply ping can be off.** A new message can instead include the current reference, for example `#DF-ABC123 yes`.
 
@@ -52,10 +66,10 @@ Zoom delivery sends from **your authorized Zoom account** to existing **Team Cha
    - `user:read:user` — verify the authorized account.
    - `team_chat:write:user_message` — send a Team Chat message.
    - `team_chat:read:list_user_messages` — collect contact replies.
-3. Enter the **Client ID** and **Client Secret** in Dayflow **Connections → Zoom** and click **Save Zoom settings**.
-4. Click **Start Zoom authorization connection**. Dayflow starts cloudflared on its isolated OAuth callback listener, port **4319**.
-5. Copy the exact **Zoom OAuth Redirect URL** shown in Dayflow, ending in `/oauth/zoom/callback`. Save it as the app’s OAuth Redirect URL and in its OAuth allow list in Zoom.
-6. Back in Dayflow, click **Create Zoom authorization link**, then **Authorize on Zoom**. Sign in with the Zoom account that will send proposals and accept the requested access. Return to Dayflow when the connection succeeds.
+3. Enter the **Client ID** and **Client Secret** in DayMade **Connections → Zoom** and click **Save Zoom settings**.
+4. Click **Start Zoom authorization connection**. DayMade starts cloudflared on its isolated OAuth callback listener, port **4319**.
+5. Copy the exact **Zoom OAuth Redirect URL** shown in DayMade, ending in `/oauth/zoom/callback`. Save it as the app’s OAuth Redirect URL and in its OAuth allow list in Zoom.
+6. Back in DayMade, click **Create Zoom authorization link**, then **Authorize on Zoom**. Sign in with the Zoom account that will send proposals and accept the requested access. Return to DayMade when the connection succeeds.
 7. Add a coworker with platform **Zoom Team Chat** and their existing contact email, then **Save coworkers** and **Check Zoom connection**.
 
 Your organization may require approval to install an app. If you cannot authorize the app or access Team Chat APIs, leave Zoom participants unchecked and continue with Discord and your Telegram owner connection. An unused Zoom connection does not block Discord participants.
@@ -75,31 +89,49 @@ Each participant has one selected platform and an **Include in meeting** checkbo
 
 Only checked participants receive requests. Connect all the platforms used by those participants, review the combined recipient list, and approve once. There is no automatic fallback to another platform and no unsolicited test send.
 
-## What is real and what is simulated
+## Real time and real calendar
 
-- **Simulated messages:** seeded coworkers, no real coworker messages. If your owner Telegram account is paired, it may receive explicitly labelled replay approval cards and updates.
-- **Live messages:** real platform delivery and authenticated replies, after owner approval.
-- **Practice scenario:** lunch, calendar entries, location samples and travel estimates are seeded data; it never edits Calendar. Meeting times use **Hong Kong time (HKT)**.
-- **My calendar:** reads actual events from Apple Calendar on this Mac and uses its current timezone. Complete, approved plans can update editable personal events after all selected friends accept. Calendar invitations stay fixed. There is no locked-phone location tracking.
-- Qwen drafts the opening and interprets replies; deterministic guards require affirmative evidence and actual mentioned times. When unavailable, conservative rules handle explicit yes/no and leave uncertain text for review.
-- A counterproposal requires a fresh owner approval. The current demo does not automatically discover everybody’s calendar availability.
+**Plan my day replaces Practice scenario.** The former `?view=demo` link opens the real planner; `?view=plan` is its current URL. The clock ticks in the Mac Calendar timezone, and the timeline shows real event dates, durations, past/current status and minutes until the next event. While the workspace is open, connected Calendar data refreshes about once per minute and whenever you click Refresh day. The planner rereads Calendar before preparing, approving and saving changes.
+
+Use **Move a meeting** to reschedule an editable, future, flexible event today. Its linked friends come from the event's configuration. Choose a start time and transition buffer; conflicting times produce a visible blocker. An earlier future time is supported. **Need a little longer?** calculates the ripple from a current or recently ended event across later appointments.
+
+Every new proposal uses real dates, event titles, durations and selected friends. Approval can send real Discord/Zoom messages and save real Calendar changes after agreement. No fake event or clock is used when Calendar is empty, disconnected or stale. The old seeded-scenario creation, approval and notification endpoints are retired; already sent conversations can still be reviewed and stopped.
+
+Travel/transition minutes are supplied by you. DayMade does not claim to measure your location or calculate a real route.
 
 ## Apple Calendar on Mac and iPhone
 
 1. Open **My calendar → Connect Apple Calendar** and allow **Full Access** for **Dayflow Calendar** if macOS asks. No Apple password or Microsoft registration is needed. If denied, enable it in System Settings → Privacy & Security → Calendars.
-2. Enable iCloud Calendar on your Mac and iPhone using the same Apple Account. Dayflow reads calendars already available on the Mac. Only iCloud-backed events sync to iPhone; “On My Mac” events stay local.
+2. Enable iCloud Calendar on your Mac and iPhone using the same Apple Account. DayMade reads calendars already available on the Mac. Only iCloud-backed events sync to iPhone; “On My Mac” events stay local.
 3. Add your Discord friends in **Connections**, with each person's Discord user ID. On the calendar timeline, mark future personal events **Allow this event to move later**, then select the friends for that event. No selected friends means personal time and no social messages. Invitations, all-day events and read-only calendars stay fixed.
-4. Turn on **Check in on Telegram when an event ends**. Keep this Mac awake and Dayflow running. A Telegram check-in asks whether you're finished or need another 15/30 minutes. Monitoring starts when enabled; it does not send retrospective check-ins for earlier events.
+4. Turn on **Check in on Telegram when an event ends**. Keep this Mac awake and DayMade running. A Telegram check-in asks whether you're finished or need another 15/30 minutes. Monitoring starts when enabled; it does not send retrospective check-ins for earlier events.
 5. Or select a current/recently ended event on the dashboard, enter remaining extra minutes and a travel/transition buffer, then **Review the rest of my day**. The planner preserves durations, uses available gaps and shifts flexible appointments around fixed ones. Conflicts with fixed commitments or moves past midnight block approval.
-6. Review **every before/after time, friend and exact message**. Approve the full plan on Telegram or on the Mac. Real calendar plans always use real Discord/Zoom messages after approval; the practice scenario's simulation switch does not apply.
-7. Each affected meeting has a separate reference and reply inbox. All named friends must explicitly accept before any calendar save. A decline, unclear reply or counterproposal pauses the plan. Review replies, stop that plan and build a fresh one with new approval. No silent acceptance or automatic negotiation of unapproved times.
-8. Dayflow rereads the day before sending and before saving; intervening Calendar changes invalidate the plan. One batch updates only the selected event occurrences. The current overrun event's stored end time is not extended. The Mac reports confirmed saves privately on Telegram.
+6. Review **every before/after time, friend and exact message**. Approve the full plan on Telegram or on the Mac. Plans use real Discord/Zoom messages after approval.
+7. Each affected meeting has a separate reference and reply inbox. All named friends must explicitly accept before any calendar save. A decline starts another calendar-checked round automatically. A suggested time is tried first if free; otherwise the agent offers the next suitable slot. Unclear replies get a direct clarification request. Every changed time resets all acceptance statuses, so everyone must confirm the latest proposal.
+8. DayMade rereads the day before sending and before saving. During delegated negotiation, unrelated Calendar edits can be rebased; new conflicts trigger another round. An external edit to a target event stops coordination without overwriting it. One batch updates only the selected event occurrences. The current overrun event's stored end time is not extended. The Mac reports confirmed saves privately on Telegram.
 
-**Five-minute rehearsal with real events:** in Apple Calendar, add a personal “Lunch demo” ending in one minute and a “Coffee demo” starting in about 15 minutes. Put Coffee in an editable iCloud calendar, without Apple invitees. Refresh Dayflow, mark Coffee flexible, and select your Discord friend. Enable check-ins, wait for Lunch to end, and tap **Need 30 more min** on Telegram. Review and approve the resulting message; your friend replies with its `#DF-… yes` reference. Verify Coffee moves in Calendar and syncs to iPhone. Delete your demo events afterward in Calendar. No rehearsal events are created automatically.
+**Five-minute rehearsal with real events:** in Apple Calendar, add a personal “Lunch demo” ending in one minute and a “Coffee demo” starting in about 15 minutes. Put Coffee in an editable iCloud calendar, without Apple invitees. Refresh DayMade, mark Coffee flexible, and select your Discord friend. Enable check-ins, wait for Lunch to end, and tap **Need 30 more min** on Telegram. Review and approve the resulting message; your friend replies with its `#DF-… yes` reference. Verify Coffee moves in Calendar and syncs to iPhone. Delete your demo events afterward in Calendar. No rehearsal events are created automatically.
 
-An existing active practice conversation must be finished before a Calendar plan can send. **Stop this plan** stops monitoring but does not retract already sent messages. Approvals expire after ten minutes; coordination stops after thirty minutes or when a proposed time passes. Restart during coordination pauses for review. A restart or error during Calendar saving is treated as uncertain: inspect Calendar before trying again; the app never retries writes automatically.
+An existing active conversation from the earlier scenario must be stopped before a Calendar plan can send. **Stop this plan** stops monitoring but does not retract already sent messages. Approvals expire after ten minutes; coordination stops after thirty minutes or when a proposed time passes. Restart during delegated coordination resumes monitoring; a restart during an uncertain send still requires inspection. A restart or error during Calendar saving is treated as uncertain: inspect Calendar before trying again; the app never retries writes automatically.
 
-The schedule planner is deterministic. The local open model interprets friend replies with the existing evidence checks; it cannot select recipients or authorize calendar writes. All-day entries are displayed but excluded from timed travel calculations. Dayflow cannot read your friends' private calendars, estimate live traffic or detect an actual overrun from Calendar alone.
+The schedule planner is deterministic. The local open model interprets friend replies with the existing evidence checks; it cannot select recipients or authorize calendar writes. All-day entries are displayed but excluded from timed travel calculations. DayMade cannot read your friends' private calendars, estimate live traffic or detect an actual overrun from Calendar alone.
+
+## Autonomous negotiation
+
+Start a **new proposal** to use the updated behavior. Existing proposals retain the scope of their earlier approval. Your first approval now delegates the back-and-forth to DayMade: same meeting duration and participants, alternative times today, at most six proposal rounds within thirty minutes.
+
+| Friend’s reply | Agent action |
+| --- | --- |
+| `For sure!`, `np`, `no problem`, `yep` | Record acceptance for the current proposal |
+| `no`, `can't make it` | Read Calendar, find the next untried free slot, propose it to everyone |
+| `how about 15:00`, `14:30 ok?` | Check that suggested time first; offer another slot if busy |
+| `maybe`, `yes if…`, an ambiguous date or time | Ask that friend directly to clarify |
+
+Use Discord’s **Reply** on the latest proposal (or include its `#DF-…` reference). No @bot mention is required. Each alternative gets a new reference. Old approvals, old replies and acceptance of an earlier time cannot approve the new one. The dashboard keeps round history and the reason for each alternative.
+
+The agent reports the final time privately. Both calendar views share the same plan and save event changes only once everyone has agreed. If no free slot remains, six proposals fail, the coordination window expires, or a friend cannot clarify after two requests, it reports a terminal **no agreement** result. It does not manufacture agreement or send indefinitely. Delivery uncertainty stops further automatic messages.
+
+Alternative slots are checked against the real Apple Calendar on this Mac. The planner also reserves the other proposed event moves when finding a new slot, so it cannot book two events into the same gap.
 
 ## Reliability and approval behavior
 
@@ -127,7 +159,7 @@ npm run build
 npm run launch
 ```
 
-The launcher starts the local model server if needed and opens Dayflow on your Mac. Keep the terminal running. `localhost:4317` is the Mac’s dashboard; participants interact through their messaging apps.
+The launcher starts the local model server if needed and opens DayMade on your Mac. Keep the terminal running. `localhost:4317` is the Mac’s dashboard; participants interact through their messaging apps.
 
 For development, stop the existing app and run `npm run dev`, then open `http://localhost:5173`. `npm run build` updates the production UI; `npm start` starts the server without opening a browser.
 
@@ -137,26 +169,57 @@ If needed on another Mac:
 brew install ollama cloudflared
 ollama serve
 # In another terminal:
-ollama pull qwen3:4b
+ollama pull qwen3.6:35b
 ```
+
+## Two-way meeting changes
+
+1. Open [DayMade](http://localhost:4317) → **My calendar** and refresh Apple Calendar.
+2. On a future personal meeting today, select **Allow this event to be rescheduled**, then select the friends who attend. Save their Discord user IDs or Zoom contact emails in Connections first. Calendar invitations and read-only events stay fixed.
+3. Keep **Handle teammate rescheduling requests** enabled. Telegram must be paired, Calendar connected, and the selected friends' platforms connected.
+4. A saved friend posts a **new message** in the configured Discord channel (or the connected Zoom Team Chat contact conversation): `Can we move Coffee from 17:00 to 17:30?` Use the exact event title or original time and clear 24-hour times. This demo handles today, in the Calendar timezone.
+5. If free, your Telegram card offers **Accept 17:30**, **Another time**, or **Decline request**. For another time, reply to the bot's new prompt with e.g. `18:00`. The same controls are in the web inbox.
+6. If busy, DayMade automatically tells the friends that time is unavailable and proposes the first free alternative afterward, preserving duration and a 10-minute buffer. It does not reveal private event details.
+7. The requester already agreed to the exact time they requested. Other friends confirm using **Reply** on their DayMade proposal or its current `#DF-…` reference. A different time requires everyone to agree again. DayMade checks Calendar on each new round, saves after agreement, and reports the confirmed time on Telegram and to the friends.
+
+Plain-language English scheduling requests are matched conservatively; ambiguous requests receive a clarification instead of moving an event. Existing reply interpretation still uses the local open model with grounded rules for “For sure!”, “np”, declines and counterproposals. Edited old messages are not new requests. Waiting owner cards expire after ten minutes; one meeting is coordinated at a time. This does not add automatic iPhone location tracking or access to friends' private calendars.
+
+### Disconnect for debugging
+
+In **Connections**, each Telegram / Discord / Zoom tab has a **Disconnect** button. Apple Calendar has its own button in **My calendar**. Disconnect pauses coordination and incoming requests, invalidates pending approvals and stays disconnected after restart. Saved credentials, owner pairing and macOS Calendar permission are kept. A send or Calendar write already in progress must finish before disconnecting; completed actions are not undone.
+
+To resume, reconnect the integration, then turn **Handle teammate rescheduling requests** back on in My calendar. Messages posted while paused are skipped, so ask your friend to send a fresh request. End-of-event check-ins have a separate toggle.
+
+## Local model configuration
+
+This Mac uses `qwen3.6:35b` through local Ollama. The model download is approximately 23 GB; this setup targets the Mac's 48 GB of unified memory. There are no model API charges. Existing saved settings take precedence over the default model.
+
+To verify a model before switching the app:
+
+```bash
+npm run test:llm -- qwen3.6:35b
+```
+
+In **Connections → Open model**, use `http://127.0.0.1:11434` and model name `qwen3.6:35b`. The connection check verifies installation; `test:llm` exercises actual inference and requires model responses rather than the rules fallback. Model choice does not itself replace the request parser or scheduling rules.
 
 ## Troubleshooting
 
 | Symptom | Next step |
 | --- | --- |
-| Telegram stopped receiving | Use one running Dayflow process and a dedicated bot with no webhook. Click Check Telegram connection. |
+| Telegram stopped receiving | Use one running DayMade process and a dedicated bot with no webhook. Click Check Telegram connection. |
 | Discord returns 403 | Check server/channel permission overrides, including history and send permissions. |
-| Discord replies are empty or ignored | Reconnect Discord so Dayflow checks/enables Message Content Intent. Use Reply on the actual proposal; no @bot mention or reply ping is needed. If Discord requires intent approval, complete that in Developer Portal → Bot. |
+| Discord replies are empty or ignored | Reconnect Discord so DayMade checks/enables Message Content Intent. Use Reply on the actual proposal; no @bot mention or reply ping is needed. If Discord requires intent approval, complete that in Developer Portal → Bot. |
 | Zoom authorization fails | Check development credentials, exact redirect URL/allow list, scopes, and whether your organization requires app approval. |
 | Zoom token expires | Click Check Zoom connection; if renewal fails, authorize again. |
 | Zoom send/read returns 400 or 403 | Confirm the selected person is an existing Team Chat contact and the app has both read and write scopes. |
 | Missing response | Check the platform, identity and current reference. Coworkers should send a new reply, not edit an old message. |
-| Settings are locked | Finish monitoring the active live proposal before editing connections. |
+| Settings are locked | Finish monitoring the active live proposal before editing connections, or use Disconnect to stop coordination. |
+| A friend’s new request is ignored | Enable request listening; link that saved friend to a flexible future event today. Post a new message with the exact title or original time and the requested time. |
 
 ## Code map
 
 ```text
-src/App.tsx             Dashboard, approval and shared response list
+src/App.tsx             Navigation and previously sent conversation controls
 src/Connections.tsx     Platform setup, Discord/Zoom participant routing
 shared/types.ts         Coworkers, platforms, proposals and delivery state
 native/CalendarBridge.swift  Native EventKit permission/read/write helper
@@ -171,6 +234,8 @@ server/discord.ts       Channel messages and reply polling
 server/zoom.ts          User OAuth, token refresh, contact sends/replies
 server/transport.ts     Shared receipts and reply correlation
 server/inbox.ts         Durable incoming reply queue
+server/requests.ts      Teammate request intake, calendar checks and owner responses
+src/RequestsInbox.tsx   Two-way request inbox and custom-time controls
 server/llm.ts           Local model and grounded interpretation
 server/store.ts         Owner-only local settings and state
 server/tunnel.ts        Temporary OAuth callback connection

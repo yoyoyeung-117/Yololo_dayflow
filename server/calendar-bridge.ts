@@ -12,7 +12,7 @@ export class AppleCalendar implements CalendarBridge {
   constructor(private directory: string) {}
   private call(input: object): Promise<any> {
     const result = this.queue.then(async () => {
-      if (process.platform !== 'darwin') throw new Error('Apple Calendar requires Dayflow to run on your Mac.');
+      if (process.platform !== 'darwin') throw new Error('Apple Calendar requires DayMade to run on your Mac.');
       const app = path.resolve('.local/Dayflow Calendar.app');
       try { await fs.access(app); } catch { throw new Error('Build the Calendar helper first: npm run calendar:build'); }
       const folder = path.join(this.directory, 'calendar-requests'); await fs.mkdir(folder, { recursive: true, mode: 0o700 });
@@ -27,6 +27,7 @@ export class AppleCalendar implements CalendarBridge {
     });
     this.queue = result.catch(() => {}); return result;
   }
+  route(input: { origin: object; destination: object; mode: string }) { return this.call({ action: 'route', ...input }); }
   read(connect = false) { return this.call({ action: connect ? 'connect' : 'read', day: localDay() }) as Promise<CalendarDay>; }
-  async apply(plan: DayPlan) { const value = await this.call({ action: 'apply', day: plan.day, revision: plan.revision, bufferMinutes: plan.bufferMinutes, changes: plan.changes.map(c => ({ id: c.event.id, start: c.start, end: c.end })) }); return value.receipts; }
+  async apply(plan: DayPlan) { const value = await this.call({ action: 'apply', day: plan.day, revision: plan.revision, allowEarlier: Boolean(plan.peer || plan.reschedule), bufferMinutes: plan.bufferMinutes, changes: plan.changes.map(c => ({ id: c.event.id, start: c.start, end: c.end })) }); return value.receipts; }
 }

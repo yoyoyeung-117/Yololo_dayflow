@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import type { Person, Proposal, Settings } from '../shared/types.js';
+import type { Coworker, Person, Proposal, Settings } from '../shared/types.js';
 import type { Store } from './store.js';
 import { SendFailure, type Incoming } from './transport.js';
 
@@ -17,6 +17,7 @@ export class Zoom {
   get account() { return this.connected ? this.tokens?.account || null : null; }
   get userId() { return this.tokens?.userId || ''; }
   get redirectUrl() { return this.settings().zoomRedirectBaseUrl ? `${this.settings().zoomRedirectBaseUrl}/oauth/zoom/callback` : ''; }
+  disconnect() { this.connected = false; this.error = null; this.pending = null; }
   invalidate() { this.connected = false; this.error = null; this.pending = null; this.tokens = null; this.store.write('zoom-tokens', null); }
   authorizeUrl() {
     if (!this.configured || !this.redirectUrl) throw new Error('Save Zoom client credentials and start its authorization connection first.');
@@ -26,7 +27,7 @@ export class Zoom {
   async callback(code: string, state: string) {
     const pending = this.pending;
     const digest = (text: string) => createHash('sha256').update(text).digest();
-    if (!pending || Date.now() > pending.expiresAt || !timingSafeEqual(digest(state), digest(pending.state)) || pending.clientId !== this.settings().zoomClientId || pending.redirectUrl !== this.redirectUrl) throw new Error('Zoom authorization expired or does not match. Start authorization again from Dayflow.');
+    if (!pending || Date.now() > pending.expiresAt || !timingSafeEqual(digest(state), digest(pending.state)) || pending.clientId !== this.settings().zoomClientId || pending.redirectUrl !== this.redirectUrl) throw new Error('Zoom authorization expired or does not match. Start authorization again from DayMade.');
     this.pending = null;
     if (!code || code.length > 2000) throw new Error('Zoom did not return an authorization code.');
     await this.exchange({ grant_type: 'authorization_code', code, redirect_uri: pending.redirectUrl });
@@ -76,11 +77,26 @@ export class Zoom {
   }
   async sendProposal(person: Person, proposal: Proposal) {
     if (!this.connected || !person.address) throw new SendFailure('Authorize Zoom and add a Team Chat contact email first.', true);
-    const result = await this.api<{ id: string; date_time?: string }>('/chat/users/me/messages', { to_contact: person.address, message: `Dayflow · Meeting proposal\n\n${proposal.text}` });
+    const result = await this.api<{ id: string; date_time?: string }>('/chat/users/me/messages', { to_contact: person.address, message: `DayMade · Meeting proposal\n\n${proposal.text}` });
     if (!result.id) throw new SendFailure('Zoom returned no message receipt. Check Team Chat before sending again.', false);
     return { id: result.id, createdDateTime: result.date_time || new Date().toISOString(), delivery: 'sent' as const };
   }
-  async poll(proposal: Proposal, receive: (event: Incoming) => Promise<void>) {
+  async sendText(person: Coworker, text: string) {
+    if (!this.connected) throw new SendFailure('Reconnect Zoom first.', true);
+    const result = await this.api<{ id: string }>('/chat/users/me/messages', { to_contact: person.address, message: `DayMade · ${text}` });
+    if (!result.id) throw new SendFailure('Zoom returned no receipt. No automatic retry.', false);
+  }
+  async pollRequests(since: number, people: Coworker[], receive: (event: Incoming) => Promise<void>) {
+    if (!this.connected) return;
+    const cursors = this.store.read<Record<string, number>>('zoom-request-cursors', {});
+    for (const person of people.filter(p => p.enabled && p.platform === 'zoom' && p.address)) {
+      const key = `${this.userId}:${person.address}:${since}`, until = Date.now();
+      await this.poll({ sentAt: Math.max(since, cursors[key] || since), people: [{ ...person, messageId: 'request-listener', status: 'pending' }] }, async event => { if (this.connected) await receive(event); });
+      if (this.error) return;
+      cursors[key] = until - 1000; this.store.write('zoom-request-cursors', cursors);
+    }
+  }
+  async poll(proposal: Pick<Proposal, 'sentAt' | 'people'>, receive: (event: Incoming) => Promise<void>) {
     if (!this.connected || Date.now() < this.cooldown) return;
     try {
       for (const person of proposal.people.filter(p => p.platform === 'zoom' && p.messageId && p.address)) {

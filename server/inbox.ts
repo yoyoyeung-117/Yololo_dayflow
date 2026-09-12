@@ -5,7 +5,7 @@ import { correlateReply, type Incoming } from './transport.js';
 type Event = { proposalId: string; incoming: Incoming };
 export class ReplyInbox {
   private events: Event[];
-  private draining = false;
+  private drainTask: Promise<void> | null = null;
   constructor(private engine: Engine, private store: Store) { this.events = store.read('social-inbox', []); }
   async receive(incoming: Incoming) {
     const proposal = this.engine.state.proposal;
@@ -14,19 +14,21 @@ export class ReplyInbox {
     if (this.events.length >= 1000) throw new Error('The reply queue is full. Finish processing the current conversation first.');
     this.events.push({ proposalId: proposal.id, incoming }); this.store.write('social-inbox', this.events);
   }
-  async drain() {
-    if (this.draining || ['preparing', 'sending'].includes(this.engine.state.phase)) return;
-    this.draining = true;
-    try {
-      while (this.events.length) {
-        if (['preparing', 'sending'].includes(this.engine.state.phase)) break;
-        const event = this.events[0], proposal = this.engine.state.proposal;
-        if (proposal?.id === event.proposalId) {
-          const reply = correlateReply(event.incoming, proposal);
-          if (reply) await this.engine.reply(proposal.id, reply.personId, reply.text, reply.messageId);
-        }
-        this.events.shift(); this.store.write('social-inbox', this.events);
+  drain(): Promise<void> {
+    if (this.drainTask) return this.drainTask;
+    this.drainTask = this.process().finally(() => { this.drainTask = null; });
+    return this.drainTask;
+  }
+  private async process() {
+    if (['preparing', 'sending'].includes(this.engine.state.phase)) return;
+    while (this.events.length) {
+      if (['preparing', 'sending'].includes(this.engine.state.phase)) break;
+      const event = this.events[0], proposal = this.engine.state.proposal;
+      if (proposal?.id === event.proposalId) {
+        const reply = correlateReply(event.incoming, proposal);
+        if (reply) await this.engine.reply(proposal.id, reply.personId, reply.text, reply.messageId);
       }
-    } finally { this.draining = false; }
+      this.events.shift(); this.store.write('social-inbox', this.events);
+    }
   }
 }

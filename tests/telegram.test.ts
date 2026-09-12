@@ -46,3 +46,36 @@ test('Telegram pairing requires the active code and a private chat belonging to 
     assert.equal(owner, '42'); assert.equal(telegram.pairingCode, null);
   } finally { telegram.stop(); fs.rmSync(directory, { recursive: true, force: true }); }
 });
+
+test('Telegram custom-time replies bind to the paired owner, exact prompt, expiry and request', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'dayflow-time-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const config = { ...defaults(), telegramToken: '123:fake', telegramOwnerChatId: '42' }, actions: unknown[] = [], calls: any[] = [];
+  const make = () => new Telegram(() => config, () => {}, new Store(directory), async (...args) => { actions.push(args); });
+  const tg = make(); tg.connected = true;
+  (tg as any).api = async (method: string, body: unknown) => { calls.push({ method, body }); return { message_id: 321 }; };
+  await tg.askTime('request-id', 'Coffee', 'Asia/Hong_Kong', Date.now() + 60000);
+  assert.equal(calls[0].body.reply_markup.force_reply, true);
+  const restarted = make(); (restarted as any).api = (tg as any).api;
+  const reply = (user: number, text: string, quotedId = 321) => ({ message: { message_id: 400, date: Date.now() / 1000, chat: { id: user, type: 'private' }, from: { id: user }, text, reply_to_message: { message_id: quotedId } } });
+  await (restarted as any).handle(reply(99, '17:45')); await (restarted as any).handle(reply(42, '17:45', 322)); await (restarted as any).handle(reply(42, '25:00')); assert.equal(actions.length, 0);
+  await (restarted as any).handle(reply(42, '17:45')); assert.deepEqual(actions, [['peertime', 'request-id', '17:45']]);
+  await (restarted as any).handle(reply(42, '17:45')); assert.equal(actions.length, 1);
+  await tg.askTime('expired', 'Coffee', 'Asia/Hong_Kong', Date.now() - 1); await (tg as any).handle(reply(42, '17:45')); assert.equal(actions.length, 1);
+  tg.stop(); assert.deepEqual(new Store(directory).read('telegram-time-prompts', {}), {});
+});
+
+test('Telegram reconnect after stop uses a fresh abort signal and only one polling loop', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'dayflow-reconnect-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  let active = 0, maxActive = 0, polls = 0;
+  const http = (async (input, init) => {
+    assert.equal(init?.signal?.aborted, false);
+    if (String(input).endsWith('/getUpdates')) {
+      active++; polls++; maxActive = Math.max(active, maxActive);
+      return new Promise<Response>((_resolve, reject) => { init!.signal!.addEventListener('abort', () => { active--; reject(new Error('aborted')); }, { once: true }); });
+    }
+    return new Response(JSON.stringify({ ok: true, result: String(input).endsWith('/getMe') ? { username: 'demo' } : { url: '' } }));
+  }) as typeof fetch;
+  const tg = new Telegram(() => ({ ...defaults(), telegramToken: '123:fake', telegramOwnerChatId: '42' }), () => {}, new Store(directory), async () => {}, http);
+  await tg.connect(); tg.stop(); await tg.connect(); assert.equal(tg.connected, true); assert.equal(maxActive, 1); assert.equal(polls, 2); tg.stop();
+  await new Promise(resolve => setImmediate(resolve));
+});

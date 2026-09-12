@@ -9,7 +9,7 @@ const port = process.env.PORT || '4317';
 const url = `http://localhost:${port}`;
 const settings = fs.existsSync('.local/settings.json') ? JSON.parse(fs.readFileSync('.local/settings.json', 'utf8')) : {};
 const ollamaUrl = settings.ollamaUrl || process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
-const model = settings.ollamaModel || process.env.OLLAMA_MODEL || 'qwen3:4b';
+const model = settings.ollamaModel || process.env.OLLAMA_MODEL || 'qwen3.6:35b';
 const children = [];
 const ready = async endpoint => { try { return (await fetch(endpoint, { signal: AbortSignal.timeout(1000) })).ok; } catch { return false; } };
 const openBrowser = () => { if (process.platform === 'darwin') spawn('open', [url], { stdio: 'ignore' }).unref(); };

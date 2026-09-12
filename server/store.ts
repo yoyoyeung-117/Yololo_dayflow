@@ -25,7 +25,7 @@ export const defaults = (): Settings => ({
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramOwnerChatId: process.env.TELEGRAM_OWNER_CHAT_ID || '',
   ollamaUrl: process.env.OLLAMA_URL || 'http://127.0.0.1:11434',
-  ollamaModel: process.env.OLLAMA_MODEL || 'qwen3:4b',
+  ollamaModel: process.env.OLLAMA_MODEL || 'qwen3.6:35b',
 });
 
 export const initialState = (): State => ({

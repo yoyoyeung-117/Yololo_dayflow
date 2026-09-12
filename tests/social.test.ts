@@ -58,7 +58,7 @@ test('Discord sends only the selected mention and binds replies to the configure
   const p = proposal();
   const http = (async (input, init) => {
     const url = String(input); calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-    if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'Dayflow', bot: true });
+    if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'DayMade', bot: true });
     if (url.endsWith('/applications/@me')) return json({ flags: 1 << 19 });
     if (url.endsWith('/channels/888888888888888888')) return json({ id: settings.discordChannelId, name: 'demo', type: 0, guild_id: 'server' });
     if (init?.method === 'POST') return json({ id: '900000000000000001', timestamp: new Date().toISOString() });
@@ -84,7 +84,7 @@ test('Discord enables unmentioned reply content and preserves existing editable 
   const enabled = (1 << 13) | (1 << 15) | (1 << 19);
   const discord = new Discord(() => ({ ...defaults(), discordToken: 'fake', discordChannelId: '888888888888888888' }), f.store, (async (input, init) => {
     const url = String(input);
-    if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'Dayflow', bot: true });
+    if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'DayMade', bot: true });
     if (url.endsWith('/channels/888888888888888888')) return json({ id: '888888888888888888', name: 'demo', type: 0, guild_id: 'server' });
     if (url.endsWith('/applications/@me')) {
       calls.push({ method: init!.method!, body: init?.body ? JSON.parse(String(init.body)) : undefined });
@@ -105,7 +105,7 @@ test('Discord accepts either content intent flag without changing application se
     const discord = new Discord(() => ({ ...defaults(), discordToken: 'fake', discordChannelId: '888888888888888888' }), f.store, (async (input, init) => {
       assert.equal(init?.method, 'GET');
       const url = String(input);
-      if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'Dayflow', bot: true });
+      if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'DayMade', bot: true });
       if (url.endsWith('/applications/@me')) return json({ flags });
       if (url.endsWith('/channels/888888888888888888')) return json({ id: '888888888888888888', name: 'demo', type: 0, guild_id: 'server' });
       return json([]);
@@ -120,7 +120,7 @@ test('Discord does not report readiness when unmentioned reply content cannot be
     const f = fixture();
     const discord = new Discord(() => ({ ...defaults(), discordToken: 'fake', discordChannelId: '888888888888888888' }), f.store, (async (input, init) => {
       const url = String(input);
-      if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'Dayflow', bot: true });
+      if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'DayMade', bot: true });
       if (url.endsWith('/applications/@me')) return json({ flags: 0 }, init?.method === 'PATCH' ? status : 200);
       if (url.endsWith('/channels/888888888888888888')) return json({ id: '888888888888888888', name: 'demo', type: 0, guild_id: 'server' });
       return json([]);
@@ -238,4 +238,34 @@ test('migration preserves owner pairing and model, strips old credentials, and k
     assert.equal((await fetch(`${publicBase}/`)).status, 404);
     assert.equal((await fetch(`${base}/api/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ telegramOwnerChatId: '99' }) })).status, 400);
   } finally { server.closeAllConnections(); publicServer.closeAllConnections(); await Promise.all([new Promise<void>(r => server.close(() => r())), new Promise<void>(r => publicServer.close(() => r()))]); f.cleanup(); }
+});
+
+test('Discord listens without a proposal, uses a durable cursor, and retries intake only before acknowledgement', async () => {
+  const f = fixture(), since = Date.now() - 1000, floor = BigInt(since - 1420070400000) << 22n;
+  const calls: string[] = [], events: Incoming[] = [];
+  const messages = [1n, 2n].map(n => ({ id: String(floor + n), content: 'Move Coffee from 17:00 to 17:30', author: { id: '123456789012345678' }, timestamp: new Date(since + 100).toISOString() }));
+  const http = (async input => { const url = new URL(String(input)); calls.push(String(input)); const after = BigInt(url.searchParams.get('after')!); return json(messages.filter(m => BigInt(m.id) > after)); }) as typeof fetch;
+  const make = () => { const d = new Discord(() => ({ ...defaults(), discordToken: 'fake', discordChannelId: '888888888888888888' }), f.store, http); d.connected = true; return d; };
+  try {
+    const d = make(); let fail = true;
+    await d.pollRequests(since, async event => { if (fail) { fail = false; throw new Error('storage unavailable'); } events.push(event); });
+    assert.match(d.error!, /storage/); assert.equal(events.length, 0);
+    await d.pollRequests(since, async e => { events.push(e); }); assert.equal(events.length, 2);
+    await make().pollRequests(since, async e => { events.push(e); }); assert.equal(events.length, 2);
+    assert.ok(calls[0].includes(`after=${floor}`)); d.invalidate(); const count = calls.length; await d.pollRequests(since, async () => {}); assert.equal(calls.length, count);
+  } finally { f.cleanup(); }
+});
+
+test('Zoom accepts teammate initiation only from the saved contact and pauses without erasing OAuth tokens', async () => {
+  const f = fixture(), since = Date.now() - 2000, events: Incoming[] = [];
+  f.store.write('zoom-tokens', { accessToken: 'fake', refreshToken: 'fake', expiresAt: Date.now() + 3600000, clientId: 'client', account: 'owner@example.com', userId: 'owner' });
+  const zoom = new Zoom(() => ({ ...defaults(), zoomClientId: 'client', zoomClientSecret: 'fake' }), f.store, (async () => json({ messages: [
+    { id: 'peer', sender: 'sam@example.com', message: 'Move Coffee to 17:30', timestamp: since + 1000 },
+    { id: 'owner', sender: 'owner@example.com', message: 'Move Coffee to 17:30', timestamp: since + 1000 },
+  ] })) as typeof fetch);
+  zoom.connected = true;
+  try {
+    await zoom.pollRequests(since, [{ id: 'sam', name: 'Sam', platform: 'zoom', address: 'sam@example.com', enabled: true }], async e => { events.push(e); });
+    assert.deepEqual(events.map(e => e.messageId), ['peer']); zoom.disconnect(); assert.equal(zoom.connected, false); assert.ok(f.store.read('zoom-tokens', null));
+  } finally { f.cleanup(); }
 });

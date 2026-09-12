@@ -14,7 +14,7 @@ export function correlateReply(event: Incoming, proposal: Proposal): { personId:
   if (!person || !person.messageId || person.delivery === 'not_sent' || !event.text.trim()) return null;
   const codes = event.text.match(/#DF-[A-F0-9]{6}\b/gi)?.map(code => code.toUpperCase()) || [];
   if (codes.some(code => code !== proposal.code)) return null;
-  if (event.quotedId !== person.messageId && !codes.includes(proposal.code)) return null;
+  if (event.quotedId !== person.messageId && !person.replyMessageIds?.includes(event.quotedId || '') && !codes.includes(proposal.code)) return null;
   const text = event.text.replace(new RegExp(proposal.code, 'gi'), '').replace(/^\s*[:\-–]\s*/, '').trim();
   return text ? { personId: person.id, text: text.slice(0, 2000), messageId: `${event.platform}:${event.messageId}` } : null;
 }

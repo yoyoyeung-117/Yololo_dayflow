@@ -3,12 +3,15 @@ export type Platform = 'telegram' | 'discord' | 'zoom';
 export const platformNames: Record<Platform, string> = { telegram: 'Telegram', discord: 'Discord', zoom: 'Zoom Team Chat' };
 export type CoworkerPlatform = Exclude<Platform, 'telegram'>;
 export type Coworker = { id: string; name: string; platform: CoworkerPlatform; address: string; enabled: boolean };
-export type Phase = 'observing' | 'preparing' | 'approval' | 'sending' | 'waiting' | 'agreed' | 'attention' | 'dismissed' | 'uncertain';
+export type Phase = 'observing' | 'preparing' | 'approval' | 'sending' | 'waiting' | 'agreed' | 'attention' | 'dismissed' | 'uncertain' | 'unresolved';
 export type ReplyStatus = 'pending' | 'accepted' | 'declined' | 'counterproposal' | 'unclear';
 export type Delivery = 'not_sent' | 'sending' | 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'uncertain';
-export type Person = { id: string; name: string; platform?: CoworkerPlatform; address?: string; status: ReplyStatus; text?: string; proposedTime?: string; messageId?: string; delivery?: Delivery; deliveryError?: string };
+export type Person = { id: string; name: string; platform?: CoworkerPlatform; address?: string; status: ReplyStatus; text?: string; proposedTime?: string; messageId?: string; replyMessageIds?: string[]; clarificationFor?: string; clarificationCount?: number; delivery?: Delivery; deliveryError?: string };
 export type Proposal = {
-  calendarPlanId?: string;
+  requesterConsent?: { personId: string; time: string; text: string; sourceMessageId: string };
+  calendarPlanId?: string; meetingTitle?: string; meetingDay?: string; timezone?: string;
+  negotiation?: { round: number; maxRounds: number; deadline: number; earliestTime: string; history: { id: string; code: string; time: string; endTime: string; people: Person[]; reason: string }[] };
+
   id: string; code: string; time: string; endTime: string; text: string;
   createdAt: number; expiresAt: number; approvedAt?: number; sentAt?: number;
   messageId?: string; destinationId?: string; destinationName: string; people: Person[];
@@ -31,9 +34,9 @@ export type Settings = {
 export type IntegrationStatus = {
   ready: boolean;
   coworkers: (Coworker & { ready: boolean; reason: string })[];
-  telegram: { configured: boolean; connected: boolean; paired: boolean; username: string | null; pairingCode: string | null; error: string | null };
-  discord: { configured: boolean; connected: boolean; channelName: string | null; botName: string | null; error: string | null };
-  zoom: { configured: boolean; connected: boolean; account: string | null; error: string | null; redirectUrl: string; tunnel: { running: boolean; url: string | null; error: string | null } };
+  telegram: { paused?: boolean; configured: boolean; connected: boolean; paired: boolean; username: string | null; pairingCode: string | null; error: string | null };
+  discord: { paused?: boolean; configured: boolean; connected: boolean; channelName: string | null; botName: string | null; error: string | null };
+  zoom: { paused?: boolean; configured: boolean; connected: boolean; account: string | null; error: string | null; redirectUrl: string; tunnel: { running: boolean; url: string | null; error: string | null } };
   llm: { available: boolean; model: string; models: string[]; error: string | null };
 };
 export type PublicSettings = Omit<Settings, 'telegramToken' | 'discordToken' | 'zoomClientSecret'>;

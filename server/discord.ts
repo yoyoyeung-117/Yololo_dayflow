@@ -1,4 +1,4 @@
-import type { Person, Proposal, Settings } from '../shared/types.js';
+import type { Coworker, Person, Proposal, Settings } from '../shared/types.js';
 import type { Store } from './store.js';
 import { SendFailure, type Incoming } from './transport.js';
 
@@ -52,9 +52,33 @@ export class Discord {
   }
   async sendProposal(person: Person, proposal: Proposal) {
     if (!this.connected || !person.address || !/^\d{15,22}$/.test(person.address)) throw new SendFailure('Connect Discord and enter this coworker’s user ID first.', true);
-    const result = await this.api<{ id: string; timestamp: string }>(`/channels/${this.settings().discordChannelId}/messages`, { content: `<@${person.address}> · Dayflow meeting proposal\n\n${proposal.text}`, allowed_mentions: { parse: [], users: [person.address], replied_user: false } });
+    const result = await this.api<{ id: string; timestamp: string }>(`/channels/${this.settings().discordChannelId}/messages`, { content: `<@${person.address}> · DayMade meeting proposal\n\n${proposal.text}`, allowed_mentions: { parse: [], users: [person.address], replied_user: false } });
     if (!result.id) throw new SendFailure('Discord returned no message receipt. Check the channel before sending again.', false);
     return { id: result.id, createdDateTime: result.timestamp || new Date().toISOString(), delivery: 'sent' as const };
+  }
+  async sendText(person: Coworker, text: string) {
+    if (!this.connected || !/^\d{15,22}$/.test(person.address)) throw new SendFailure('Reconnect Discord first.', true);
+    const result = await this.api<{ id: string }>(`/channels/${this.settings().discordChannelId}/messages`, { content: `<@${person.address}> · DayMade\n${text}`.slice(0, 2000), allowed_mentions: { parse: [], users: [person.address] } });
+    if (!result.id) throw new SendFailure('Discord returned no receipt. No automatic retry.', false);
+  }
+  async pollRequests(since: number, receive: (event: Incoming) => Promise<void>) {
+    if (!this.connected || Date.now() < this.cooldown) return;
+    const key = `requests:${this.settings().discordChannelId}:${since}`;
+    this.cursors[key] ||= ((BigInt(Math.max(0, since - 1420070400000))) << 22n).toString();
+    try {
+      for (let page = 0; page < 5; page++) {
+        const messages = await this.api<DiscordMessage[]>(`/channels/${this.settings().discordChannelId}/messages?limit=100&after=${this.cursors[key]}`);
+        if (!Array.isArray(messages)) throw new Error('Discord returned an unexpected message list.');
+        messages.sort((a, b) => BigInt(a.id) < BigInt(b.id) ? -1 : 1);
+        for (const message of messages) {
+          if (!this.connected) return;
+          if (!message.author.bot) await receive({ platform: 'discord', sender: message.author.id, text: message.content || '', messageId: message.id, quotedId: message.message_reference?.message_id, at: Date.parse(message.timestamp) });
+          this.cursors[key] = message.id; this.store.write('discord-cursors', this.cursors);
+        }
+        if (messages.length < 100) break;
+      }
+      this.error = null;
+    } catch (error) { this.error = (error as Error).message; }
   }
   async poll(proposal: Proposal, receive: (event: Incoming) => Promise<void>) {
     if (!this.connected || Date.now() < this.cooldown) return;
