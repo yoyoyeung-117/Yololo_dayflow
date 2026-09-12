@@ -26,7 +26,7 @@ test('Telegram callbacks accept only the paired owner and carry the proposal ID 
     await telegram.send('Proposal', { id: proposalId, mode: 'live' } as Proposal);
     const send = calls.find(call => call.method === 'sendMessage')!;
     assert.equal(send.body.chat_id, '42');
-    assert.match(send.body.reply_markup.inline_keyboard[0][0].text, /WhatsApp/);
+    assert.match(send.body.reply_markup.inline_keyboard[0][0].text, /coworkers/);
     for (const row of send.body.reply_markup.inline_keyboard) for (const button of row) assert.ok(Buffer.byteLength(button.callback_data) <= 64);
   } finally { telegram.stop(); fs.rmSync(directory, { recursive: true, force: true }); }
 });

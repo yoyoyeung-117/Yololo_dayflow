@@ -1,94 +1,105 @@
 # Dayflow
 
-Dayflow detects a likely delay, asks for your approval on **Telegram**, sends individual proposals to coworkers on **WhatsApp through Twilio**, and reports their replies back to you.
+Dayflow spots a likely delay, asks for your approval privately on **Telegram**, sends meeting proposals through **Discord and Zoom Team Chat**, collects replies, and reports back to you.
 
-**Open the app:** http://localhost:4317 → **Connections**.
+**Open the app: http://localhost:4317 → Connections.**
 
-The open-weight model **Qwen3 4B** runs locally through Ollama. No Microsoft/Entra account or paid LLM API key is needed.
+Your existing Telegram owner pairing and Ollama settings are retained. WhatsApp and Twilio have been removed. The open-weight model **Qwen3 4B** runs locally through Ollama.
+
+## The platform roles
+
+| Platform | Who communicates | Purpose |
+| --- | --- | --- |
+| Telegram | You ↔ Dayflow | Private suggestions, approval buttons, progress and results |
+| Discord | You and coworkers, with Dayflow coordinating | Proposals and coworker replies in the selected team channel |
+| Zoom Team Chat | You and coworkers, with Dayflow coordinating | Proposals and replies in existing contact conversations |
+
+Coworkers do not join the Telegram bot. Participant destinations are restricted to Discord and Zoom in both the interface and API.
 
 ## Continue from here
 
-1. Create a [Twilio account](https://console.twilio.com/) and activate its WhatsApp testing environment.
-2. In Dayflow → Connections, enter the Twilio Account SID, Auth Token, test sender number, and optional sandbox join code. Click **Save & verify Twilio**.
-3. Add your demo coworkers’ names and international phone numbers; click **Save coworkers**.
-4. Click **Start reply connection**. Copy the generated incoming webhook URL to Twilio’s **When a message comes in** field, select **POST**, and save in Twilio.
-5. Have every coworker join your Twilio sandbox and then send **hello** to the test number. Wait for Dayflow to show **Ready · hello received** next to each coworker.
-6. Pair your Telegram bot if you have not already done so.
-7. Select **WhatsApp live**, click **Advance to 1:15 pm**, and approve the proposal on Telegram. Each coworker gets a separate WhatsApp message from the Twilio test number.
-8. Ask coworkers to quote/reply to their proposal, or type its current reference, for example `#DF-ABC123 yes`. Dayflow records responses and sends you the result on Telegram.
+1. In **Connections → Telegram**, check your saved owner connection. This is your private channel with the agent.
+2. Connect **Discord** or **Zoom Team Chat** using the instructions below. You can use either or both.
+3. Under **Your meeting participants**, add coworkers with a Discord user ID or Zoom contact email. Choose **Include in meeting** for the people to contact, then **Save coworkers**.
+4. Select **Live messages**, advance the lunch scenario, and review the proposed time and recipients on Telegram.
+5. Tap **Approve & send to coworkers**. Dayflow sends the approved request through Discord/Zoom.
+6. Coworkers reply there using a direct reply or the current `#DF-…` reference. Dayflow records their answers and reports back to you privately on Telegram.
 
-**Calendar, location and travel inputs are scenario replay data in both modes.** “WhatsApp live” enables real delivery and real replies. This demo does not track a locked phone or change calendar invitations.
+If you have not paired the owner yet, use the verified **@BotFather** in Telegram, send `/newbot`, and paste its token into Connections. Click **Save & pair Telegram** and open the private owner pairing link. Only you use this pairing link. Use a dedicated bot without an existing webhook or another polling process.
 
-## Twilio WhatsApp setup
+## Add Discord
 
-### Account and testing environment
+Discord delivery uses a bot in one regular server text channel. It mentions each selected coworker in a separate message. **All members with access to that channel can see these proposals.**
 
-In the legacy Twilio Console, open **Messaging → Try it out → Send a WhatsApp message**, then activate the **Sandbox**. In the newer trial Console, look for **Try out WhatsApp**. The legacy Sandbox supports multiple joined recipients, which is useful for the coworker demo.
+1. Open [Discord Developer Portal](https://discord.com/developers/applications) and create an application.
+2. On **Bot**, copy/reset the **bot token**. Enable **Message Content Intent** so Dayflow can read normal replies.
+3. Under **Installation**, select **Guild Install**, add the `bot` scope, and grant **View Channels**, **Send Messages**, and **Read Message History**. Install the bot into a server you manage.
+4. In Discord, enable **User Settings → Advanced → Developer Mode**. Right-click your dedicated text channel and choose **Copy Channel ID**.
+5. In Dayflow **Connections → Discord**, enter the token and channel ID; click **Save & connect Discord**. This checks bot identity and channel history access without sending a message.
+6. Add a coworker with platform **Discord**. Right-click that person in Discord, copy their **User ID**, paste it into their row, and save.
+7. After your approval, they receive a mention in that channel. They should reply directly to their proposal, or include the current reference, for example `#DF-ABC123 yes`.
 
-The Twilio testing screen shows a test sender number and a join instruction such as `join example-code`. The legacy Sandbox commonly uses `+14155238886`; use the actual sender shown in your console.
+The bot polls this channel approximately every six seconds while monitoring a live proposal. No public webhook or Discord Gateway connection is required. Use a quiet demo channel. Server permission overrides can still prevent sending; any error appears on that recipient instead of being reported as success.
 
-Find the **Account SID** (starts with `AC`) and **Auth Token** in the account dashboard. Enter these in Dayflow’s local Connections panel. The Auth Token is a secret: do not paste it into chat or commit it to Git. Clicking **Save & verify Twilio** only checks the account; it does not send a coworker message.
+## Add Zoom Team Chat
 
-No WhatsApp Business Account registration is needed for the legacy Sandbox. Twilio trial restrictions and messaging charges can apply. If your account restricts recipient numbers, follow the console’s verification instructions or use a permitted test participant.
+Zoom delivery sends from **your authorized Zoom account** to existing **Team Chat contacts**. It does not join a video call, send in-meeting chat, or create/reschedule Zoom meetings.
 
-### Coworkers and the messaging window
+### Configure the app
 
-Add up to five coworkers, each with a different number in E.164 format, e.g. `+85212345678` (illustrative only). Names and phone numbers appear on your approval card.
+1. Open [Zoom App Marketplace](https://marketplace.zoom.us/develop/create) and create a **General App** using **user-managed OAuth**. Use your app’s development credentials and local-test/distribution settings.
+2. Add these **user-level** granular scopes:
+   - `user:read:user` — verify the authorized account.
+   - `team_chat:write:user_message` — send a Team Chat message.
+   - `team_chat:read:list_user_messages` — collect contact replies.
+3. Enter the **Client ID** and **Client Secret** in Dayflow **Connections → Zoom** and click **Save Zoom settings**.
+4. Click **Start Zoom authorization connection**. Dayflow starts cloudflared on its isolated OAuth callback listener, port **4319**.
+5. Copy the exact **Zoom OAuth Redirect URL** shown in Dayflow, ending in `/oauth/zoom/callback`. Save it as the app’s OAuth Redirect URL and in its OAuth allow list in Zoom.
+6. Back in Dayflow, click **Create Zoom authorization link**, then **Authorize on Zoom**. Sign in with the Zoom account that will send proposals and accept the requested access. Return to Dayflow when the connection succeeds.
+7. Add a coworker with platform **Zoom Team Chat** and their existing contact email, then **Save coworkers** and **Check Zoom connection**.
 
-Each coworker must:
+Your organization may require approval to install an app. If you cannot authorize the app or access Team Chat APIs, leave Zoom participants unchecked and continue with Discord and your Telegram owner connection. An unused Zoom connection does not block Discord participants.
 
-1. Send the Sandbox’s `join ...` message to the test number, or follow the testing environment’s connect-device instructions.
-2. After the webhook URL is configured, send **hello** as a separate message to that same number.
+The temporary URL is needed for OAuth authorization only. If it changes before you reconnect, update it in Zoom and create a fresh authorization link. Refresh tokens are saved locally and renewed server-side. API replies are polled about every six seconds; an inbound-message webhook is not needed.
 
-A message from a coworker opens WhatsApp’s 24-hour window for free-form responses. Dayflow waits until it has received a signed inbound message from every configured coworker before allowing a live proposal. It uses a five-minute buffer at the end of that window. Ask coworkers to send hello again before a later demo. Sandbox membership expires after three days and may need renewal.
+An existing HTTPS connection may be used instead: forward it to **4319**, enter the base URL in the Zoom panel, save, and register the exact generated callback URL in Zoom. Never forward the dashboard port.
 
-If you enter the optional join code in Dayflow, Connections provides a link that opens the join message in WhatsApp. You can share that link with your demo participants yourself.
+## One meeting, several platforms
 
-This implementation sends separate one-to-one messages from the Twilio test sender. It does not connect to your personal WhatsApp account or an existing WhatsApp group.
+Each participant has one selected platform and an **Include in meeting** checkbox. For example:
 
-### Incoming replies and the temporary connection
-
-Dayflow runs two separate local HTTP listeners:
-
-| Listener | Address | Purpose |
+| Participant | Platform | Delivery |
 | --- | --- | --- |
-| Dashboard | `http://localhost:4317` | UI, settings and your approval controls |
-| Webhooks | `http://127.0.0.1:4319` | Only signed incoming WhatsApp messages and delivery callbacks |
+| Sam | Discord | Mention in the selected channel |
+| Jamie | Zoom Team Chat | Direct message from your Zoom account |
 
-The **Start reply connection** button runs `cloudflared` against **port 4319 only**. The public URL has this shape:
+Only checked participants receive requests. Connect all the platforms used by those participants, review the combined recipient list, and approve once. There is no automatic fallback to another platform and no unsolicited test send.
 
-```text
-https://your-temporary-host.trycloudflare.com/webhooks/whatsapp/incoming
-```
+## What is real and what is simulated
 
-Paste the exact URL shown in Dayflow into Twilio’s **When a message comes in** field, choose **POST**, and save. Twilio’s configuration may call this **Sandbox settings** or **Sandbox configuration**.
+- **Simulated messages:** seeded coworkers, no real coworker messages. If your owner Telegram account is paired, it may receive explicitly labelled replay approval cards and updates.
+- **Live messages:** real platform delivery and authenticated replies, after owner approval.
+- **Both modes:** lunch, calendar entries, location samples, and travel estimates are scenario replay data. No locked-phone tracking or calendar mutation is implemented. Meeting times refer to the scenario afternoon in **Hong Kong time (HKT)**.
+- Qwen drafts the opening and interprets replies; deterministic guards require affirmative evidence and actual mentioned times. When unavailable, conservative rules handle explicit yes/no and leave uncertain text for review.
+- A counterproposal requires a fresh owner approval. The current demo does not automatically discover everybody’s calendar availability.
 
-The outgoing API request automatically sets the delivery-status callback URL, so a second Twilio console field is not required.
+## Reliability and approval behavior
 
-Keep Dayflow running throughout the demo. Restarting its temporary connection produces a new URL: copy the new URL into Twilio and save again. On application restart, click **Start reply connection** again. Dayflow does not automatically change your Twilio console configuration.
+- Only the paired owner can use Telegram approval buttons. Telegram messages and old coworker buttons cannot register participants or count as coworker replies.
+- Approval expires after ten minutes. Replaced approval cards and double taps cannot send twice.
+- The sender, channel and participant addresses are checked again at approval. Configuration is locked during active live monitoring; click **Finish monitoring** before changing it.
+- Every recipient gets a separate message. A confirmed provider response is displayed as **Sent · awaiting reply**, never as agreement or a read receipt.
+- On a failed or uncertain send, receipts for earlier messages are kept and the remaining batch stops. No automatic resend occurs. Check the actual chat before creating another proposal.
+- Replies must match the known platform identity and current reference or quoted message. Unknown senders, stale references, unrelated messages and duplicates do not count.
+- Inbound replies are persisted in a local inbox before model interpretation.
+- Corrections sent as new messages can change a previous answer. Edits to an already processed message are not tracked; send a new reply instead.
+- Silence, delivery success and “maybe” never count as acceptance. Poll failures are visible in Connections; missing replies remain pending.
+- Zoom queries up to 500 messages per contact since the proposal and reports a limit error rather than silently claiming completion. Discord catches up in batches with a persisted cursor. These bounds suit a small demo, not a high-volume deployment.
+- **Finish monitoring** does not retract messages, cancel meetings or update invitations.
 
-Only the webhook listener is reachable through this tunnel. It validates Twilio signatures against the exact configured public URL, account and sender. It exposes no settings, approval routes, or frontend. Received messages are saved locally before acknowledgment, then interpreted asynchronously so model loading does not delay Twilio’s response.
+## Run and develop
 
-For a stable tunnel you already manage, forward it to port 4319 and enter its HTTPS base URL under **Use an existing public webhook connection**. Save the settings and configure the corresponding incoming URL in Twilio. Do not forward the dashboard port.
-
-## Telegram setup
-
-Existing Telegram pairing survives the WhatsApp replacement.
-
-If you have not paired it yet:
-
-1. Open the verified **@BotFather** in Telegram and send `/newbot`.
-2. Choose a bot display name and username ending in `bot`.
-3. Paste its token into Dayflow → Connections → Telegram.
-4. Click **Save & pair Telegram**, open the pairing link on your phone and tap **Start**. Alternatively, send the exact `/start CODE` shown by Dayflow to your bot.
-
-Only the paired private account can approve proposals. The card shows the proposal and recipients, plus **Approve & send to WhatsApp**, alternative-time buttons, and **Dismiss**. Choosing another time prepares a new proposal and requires a fresh approval.
-
-Telegram uses long polling, so it needs no webhook or public tunnel. Use a dedicated bot; Dayflow will not replace an existing bot webhook.
-
-## Start and edit the project
-
-Dependencies and local tools have been installed on this computer. Requirements on another computer: Node.js 22.12+ or 24, npm, Ollama, and cloudflared for live incoming WhatsApp replies.
+Requirements: Node.js 22.12+ or 24, npm, and Ollama. cloudflared is needed only for the built-in Zoom authorization connection. These tools are already installed on this computer.
 
 ```bash
 cd /Users/yeungyingyau/Developer/dayflow
@@ -97,91 +108,55 @@ npm run build
 npm run launch
 ```
 
-The launcher starts the local model server if needed, starts Dayflow, and opens the browser on macOS. Keep the terminal open; press Ctrl+C to stop. Click **Start reply connection** in Connections when you want live WhatsApp replies.
+The launcher starts the local model server if needed and opens Dayflow on your Mac. Keep the terminal running. `localhost:4317` is the Mac’s dashboard; participants interact through their messaging apps.
 
-If the tools are missing on macOS:
+For development, stop the existing app and run `npm run dev`, then open `http://localhost:5173`. `npm run build` updates the production UI; `npm start` starts the server without opening a browser.
+
+If needed on another Mac:
 
 ```bash
 brew install ollama cloudflared
 ollama serve
-```
-
-In a separate terminal:
-
-```bash
+# In another terminal:
 ollama pull qwen3:4b
 ```
 
-For development, stop the existing Dayflow server and run:
-
-```bash
-npm run dev
-# Open http://localhost:5173
-```
-
-After editing, `npm run build` refreshes the production frontend. `npm start` starts the backend with the built frontend, without opening a browser.
-
-## Rehearse without sending real messages
-
-1. Leave **Simulated WhatsApp** selected.
-2. Click **Advance to 1:15 pm**. Actual lateness rules evaluate replayed samples spanning 15 minutes.
-3. Approve the replay proposal on the dashboard or Telegram.
-4. Use **The conversation** to submit Alex’s “Yes”. It should say **1/2 agreed**.
-5. Submit Sam’s “Could we do 2:15 pm instead?”. The model should record the counterproposal and request your attention.
-6. Prepare 2:15, approve it, and have both simulated coworkers accept.
-
-The final status says everyone agreed while explicitly noting that the calendar invite has not changed.
-
-## Delivery and reply behavior
-
-- Each recipient gets a separate message, spaced at least three seconds apart for the Sandbox’s sending limit.
-- The provider accepting a request means **Queued by Twilio**, not delivered or accepted by a coworker. Signed status callbacks update sent/delivered/read/failed separately.
-- Every proposal has a new reference. A coworker’s direct quote or exact current reference correlates their reply. Unrelated messages, unknown phone numbers, old references and duplicate webhook deliveries do not count.
-- “Read” does not mean agreement. Silence remains waiting. An explicit ambiguous reply needs clarification.
-- If one send fails or times out, successful recipient receipts are preserved and remaining messages are not attempted. No automatic resend occurs. Check each delivery status and the Twilio Messaging logs before proposing again.
-- Failed/unknown delivery and a coworker’s explicit reply are different events. A correlated reply can establish that an uncertain message actually reached the recipient.
-- Approvals expire after ten minutes. Double taps and old Telegram buttons cannot send twice. Changing recipients invalidates the previously prepared approval.
-- **Finish monitoring** does not cancel meetings or retract messages.
-
 ## Troubleshooting
 
-| Symptom | What to do |
+| Symptom | Next step |
 | --- | --- |
-| Twilio credentials cannot be verified | Use the Account SID and Auth Token from the same account; confirm the account is active. |
-| Waiting for hello | Save the incoming URL with POST in Twilio; have the coworker join, then send hello separately. Check their exact international number in Dayflow. |
-| Reply connection stopped | Start it again and replace the webhook URL in Twilio. |
-| Error 63015 | Coworker has not joined this Sandbox, or membership expired. |
-| Error 63016 | Messaging window closed; ask the coworker to send hello again. |
-| Error 63007 | Check the WhatsApp sender number against the Twilio testing screen. |
-| Error 21608 | Follow Twilio’s trial recipient verification requirements. |
-| Message queued but not received | Check Twilio Messaging logs and Dayflow delivery status; do not assume it was delivered. |
-| Reply not interpreted | Quote the actual proposal or include its current `#DF-...` reference. A plain “yes” without context is deliberately ignored. |
-| Model unavailable | Run Ollama, download the configured model, and click Save & check model. The labelled rules-only replay remains available. |
+| Telegram stopped receiving | Use one running Dayflow process and a dedicated bot with no webhook. Click Check Telegram connection. |
+| Discord returns 403 | Check server/channel permission overrides, including history and send permissions. |
+| Discord replies are empty or ignored | Enable Message Content Intent; reply to the actual proposal or include its #DF reference. |
+| Zoom authorization fails | Check development credentials, exact redirect URL/allow list, scopes, and whether your organization requires app approval. |
+| Zoom token expires | Click Check Zoom connection; if renewal fails, authorize again. |
+| Zoom send/read returns 400 or 403 | Confirm the selected person is an existing Team Chat contact and the app has both read and write scopes. |
+| Missing response | Check the platform, identity and current reference. Coworkers should send a new reply, not edit an old message. |
+| Settings are locked | Finish monitoring the active live proposal before editing connections. |
 
 ## Code map
 
 ```text
-src/App.tsx                  Dashboard, Connections and demo controls
-src/styles.css               Visual tokens and responsive layout
-shared/types.ts              Proposals, recipients, delivery and integration types
-server/app.ts                Private local API and service orchestration
-server/engine.ts             Delay detection, approval and recipient state transitions
-server/whatsapp.ts           Twilio API, messaging windows and reply correlation
-server/webhooks.ts           Separate signed ingress and persistent reply queue
-server/tunnel.ts             Temporary webhook-only Cloudflare connection
-server/telegram.ts           Bot pairing, owner callbacks and phone notifications
-server/llm.ts                Ollama, structured interpretation and evidence checks
-server/store.ts              Local settings and state persistence
-scripts/launch.mjs           Start local services and open the browser
+src/App.tsx             Dashboard, approval and shared response list
+src/Connections.tsx     Platform setup, Discord/Zoom participant routing
+shared/types.ts         Coworkers, platforms, proposals and delivery state
+server/app.ts           Local API, transport routing, isolated OAuth callback
+server/engine.ts        Delay detection, approval and response transitions
+server/telegram.ts      Private owner pairing, approvals and bot polling
+server/discord.ts       Channel messages and reply polling
+server/zoom.ts          User OAuth, token refresh, contact sends/replies
+server/transport.ts     Shared receipts and reply correlation
+server/inbox.ts         Durable incoming reply queue
+server/llm.ts           Local model and grounded interpretation
+server/store.ts         Owner-only local settings and state
+server/tunnel.ts        Temporary OAuth callback connection
 ```
 
-Old proposals from the previous transport are archived to `.local/state-before-whatsapp.json` if present. Telegram pairing and model settings are retained. The old Microsoft adapter and dependency have been removed.
+Settings, tokens and received replies stay under `.local` with owner-only permissions; the directory and `.env` are ignored by Git. Tokens and client secrets are omitted from dashboard API responses. Existing proposals from the previous transport are archived in `.local/state-before-social.json`, if present. Telegram owner pairing and model configuration are retained. Legacy Telegram coworker rows are archived to `.local/coworkers-before-owner-only-telegram.json` and removed from active recipients; proposals involving them are archived and invalidated. Coworkers must be added with their Discord ID or Zoom email.
 
-## Local data and verification
+The dashboard binds to loopback port **4317** with host/origin checks. The separate public listener on **4319** exposes only the state-validated Zoom OAuth callback, not settings, approvals or the UI. This remains a single-operator local demo.
 
-Configuration and received replies are written to `.local` with owner-only permissions. `.local` and `.env` are ignored by Git. Both the Twilio Auth Token and Telegram token are omitted from frontend API responses. Saved Connections settings override environment defaults in `.env.example`.
-
-This remains a single-operator local demo. The temporary public service accepts authenticated Twilio callbacks only; it is not a public multi-user app. The bounded inbox and replay cache suit the demo, not a high-volume deployment.
+## Verification
 
 ```bash
 npm run build
@@ -190,14 +165,13 @@ npm run test:e2e
 npm run test:llm
 ```
 
-Browser tests use isolated dashboard/webhook ports 4318 and 4320 and produce screenshots under `test-results`. On another machine, run `npx playwright install chromium` once. API and webhook tests use fake credentials, signed synthetic requests and mocked provider sends; they never send real WhatsApp or Telegram messages. Live exchange still requires your account setup and a manual rehearsal.
+Tests use isolated data and mocked provider HTTP responses, covering approval gates, mixed-platform routing, reply identity/correlation, owner-only Telegram, partial failures, OAuth state and token refresh. Browser tests use ports 4318/4320. No real coworker messages are sent by automated tests. Live Discord and Zoom exchanges require your credentials and participant rehearsal.
 
 ## References
 
-- [Twilio WhatsApp Sandbox](https://www.twilio.com/docs/whatsapp/sandbox)
-- [Twilio messaging API](https://www.twilio.com/docs/messaging/api/message-resource)
-- [Twilio webhook security](https://www.twilio.com/docs/usage/webhooks/webhooks-security)
-- [WhatsApp inbound reply context](https://www.twilio.com/en-us/changelog/whatsapp-inbound-messages-will-now-include-reply-context)
-- [Cloudflare Quick Tunnels](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)
 - [Telegram Bot API](https://core.telegram.org/bots/api)
+- [Discord bot setup](https://docs.discord.com/developers/quick-start/getting-started)
+- [Discord message API](https://docs.discord.com/developers/resources/message)
+- [Zoom user OAuth](https://developers.zoom.us/docs/integrations/oauth/)
+- [Zoom Team Chat API](https://developers.zoom.us/docs/api/chat/)
 - [Ollama chat API](https://docs.ollama.com/api/chat)

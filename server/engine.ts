@@ -83,7 +83,7 @@ export class Engine {
     const oldPhase = this.state.phase;
     this.state.phase = 'preparing'; this.state.error = null; this.persist();
     try {
-      const destination = this.state.mode === 'live' ? await this.deps.destination() : { destinationId: '', destinationName: 'Project catch-up · demo', people: [{ id: 'alex', name: 'Alex Chen' }, { id: 'sam', name: 'Sam Wong' }] };
+      const destination = this.state.mode === 'live' ? await this.deps.destination() : { destinationId: '', destinationName: 'Discord + Zoom · demo', people: [{ id: 'alex', name: 'Alex Chen', platform: 'discord' as const }, { id: 'sam', name: 'Sam Wong', platform: 'zoom' as const }] };
       if (!destination.people.length) throw new Error('Add at least one coworker in Connections.');
       const draft = await this.deps.opening();
       const id = randomUUID(), code = `#DF-${id.slice(0, 6).toUpperCase()}`;

@@ -85,20 +85,21 @@ export class Zoom {
     try {
       for (const person of proposal.people.filter(p => p.platform === 'zoom' && p.messageId && p.address)) {
         let next = '';
+        const collected: ZoomMessage[] = [];
         for (let page = 0; page < 5; page++) {
           const query = new URLSearchParams({ to_contact: person.address!, page_size: '100', from: new Date(proposal.sentAt! - 1000).toISOString(), to: new Date().toISOString() });
           if (next) query.set('next_page_token', next);
           const data = await this.api<{ messages?: ZoomMessage[]; next_page_token?: string }>(`/chat/users/me/messages?${query}`);
-          const messages = data.messages || [];
-          messages.sort((a, b) => (a.timestamp || Date.parse(a.date_time || '')) - (b.timestamp || Date.parse(b.date_time || '')));
-          for (const message of messages) {
-            if (message.sender?.toLowerCase() !== person.address!.toLowerCase() || message.sender?.toLowerCase() === this.account?.toLowerCase()) continue;
-            await receive({ platform: 'zoom', sender: message.sender, text: message.message || '', messageId: message.id, quotedId: message.reply_main_message_id, at: message.timestamp || Date.parse(message.date_time || '') });
-          }
+          collected.push(...(data.messages || []));
           next = data.next_page_token || '';
           if (!next) break;
         }
         if (next) throw new Error('Zoom has more than 500 messages in this conversation since the proposal. Use a quiet demo conversation; some replies may not be processed.');
+        collected.sort((a, b) => (a.timestamp || Date.parse(a.date_time || '')) - (b.timestamp || Date.parse(b.date_time || '')));
+        for (const message of collected) {
+          if (message.sender?.toLowerCase() !== person.address!.toLowerCase() || message.sender?.toLowerCase() === this.account?.toLowerCase()) continue;
+          await receive({ platform: 'zoom', sender: message.sender, text: message.message || '', messageId: message.id, quotedId: message.reply_main_message_id, at: message.timestamp || Date.parse(message.date_time || '') });
+        }
       }
       this.error = null;
     } catch (error) { this.error = (error as Error).message; }

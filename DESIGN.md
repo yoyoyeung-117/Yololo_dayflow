@@ -10,10 +10,10 @@
 - Avoid exaggerated claims of autonomy, hidden simulations, dense configuration in the main flow.
 
 ## Product goals
-- Complete detect → approve → WhatsApp proposal → collect replies → report loop.
+- Complete detect → approve → coworker proposal → collect replies → report loop.
 - Demonstrate the workflow in 90 seconds with labelled scenario replay.
 - Non-goals: native background tracking, automatic calendar mutation, multi-user hosting.
-- Success: real WhatsApp send only after approval; no acceptance inferred from silence.
+- Success: real coworker send only after approval; no acceptance inferred from silence.
 
 ## Personas and jobs
 - Busy professional in a conversation, wants one-tap coordination.
@@ -21,7 +21,7 @@
 
 ## Information architecture
 - Dashboard: status, schedule, delay evidence, next action, responses, activity.
-- Connections: Twilio credentials, coworker phone numbers, signed webhook setup, Telegram pairing, local model.
+- Connections: Telegram owner pairing, Discord channel setup, Zoom user OAuth, per-person platform routing, local model.
 - Guide: README plus in-app setup steps.
 
 ## Design principles
@@ -55,18 +55,22 @@
 
 ## Content voice
 - Plain English. “Propose” until everyone agrees; never claim the calendar was updated.
-- “Scenario replay” for seeded time/location. “WhatsApp live” only for real Twilio WhatsApp transport.
+- “Scenario replay” for seeded time/location. “Live messages” for real transport; “Simulated messages” for replay. Display HKT explicitly.
 
 ## Implementation constraints
-- React/Vite, Express/TypeScript, local JSON storage, Ollama, Twilio WhatsApp API with signed webhooks, Telegram long polling.
-- Single local operator. Dashboard on loopback port 4317; a separate webhook-only listener on 4319 is exposed through a temporary tunnel. Secrets stay server-side.
+- React/Vite, Express/TypeScript, local JSON storage, Ollama, Telegram long polling, Discord REST polling, Zoom user OAuth and Team Chat REST polling.
+- Single local operator. Dashboard on loopback port 4317; an isolated OAuth callback listener on 4319 can be exposed through a temporary tunnel for Zoom authorization. Secrets stay server-side.
 - Verify state transitions and approval gate with tests; desktop/mobile browser checks and screenshots.
 
 ## Open questions
-- User to enter Twilio credentials, join the WhatsApp testing environment with coworkers, and pair Telegram in the local Connections UI.
+- User to pair Telegram as the private agent channel, configure Discord for coworkers and/or authorize Zoom. Only platforms used by selected coworkers affect readiness.
 - Qwen3 4B is installed and verified locally.
 
-## WhatsApp delivery contract
-- Each coworker receives a separate message from the Twilio test number. No existing WhatsApp group access.
-- Track queued, delivered, read, failed, and unknown delivery independently of acceptance. Stop after partial send failures; do not resend automatically.
-- Coworkers must join the sandbox and send hello before proposals can be sent. Show each recent messaging window in Connections.
+## Messaging contract
+- Telegram is exclusively you ↔ Dayflow: private suggestions, approvals and results. Coworkers use Discord or Zoom Team Chat: mentions in a selected Discord channel or direct messages to Zoom contacts.
+- Dashboard shows all three platform statuses and one combined response list with per-person platform badges.
+- Owner approval shows exact destinations, channel and meeting time. No coworker sends during connection checks.
+- Telegram is excluded from participant choices and backend routing. Legacy Telegram coworker invitations have no effect; owner pairing is preserved.
+- A platform receipt means sent, not read or agreed. Stop on partial send failure or uncertainty and preserve successful receipts.
+- Telegram and Discord need no public ingress. Zoom’s temporary connection is for OAuth authorization only; replies use REST polling.
+- Setup uses platform tabs and a shared participant list. Only included participants affect readiness.

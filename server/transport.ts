@@ -1,13 +1,14 @@
-import type { Person, Platform, Proposal } from '../shared/types.js';
+import { platformNames, type Person, type CoworkerPlatform, type Proposal } from '../shared/types.js';
 
 export class SendFailure extends Error {
   constructor(message: string, public definitive: boolean) { super(message); }
 }
 export type Receipt = { id: string; createdDateTime: string; delivery?: 'sent' | 'queued' };
-export type Incoming = { platform: Platform; sender: string; text: string; messageId: string; quotedId?: string; at: number };
+export type Incoming = { platform: CoworkerPlatform; sender: string; text: string; messageId: string; quotedId?: string; at: number };
 
 // The transport authenticates the sender. This function binds their words to one approved proposal.
 export function correlateReply(event: Incoming, proposal: Proposal): { personId: string; text: string; messageId: string } | null {
+  if (!['discord', 'zoom'].includes(event.platform)) return null;
   if (proposal.mode !== 'live' || !proposal.approvedAt || !proposal.sentAt || !Number.isFinite(event.at) || event.at < proposal.sentAt - 1000) return null;
   const person = proposal.people.find(p => p.platform === event.platform && p.address?.toLowerCase() === event.sender.toLowerCase());
   if (!person || !person.messageId || person.delivery === 'not_sent' || !event.text.trim()) return null;
@@ -18,5 +19,6 @@ export function correlateReply(event: Incoming, proposal: Proposal): { personId:
   return text ? { personId: person.id, text: text.slice(0, 2000), messageId: `${event.platform}:${event.messageId}` } : null;
 }
 export function recipientLabel(person: Pick<Person, 'name' | 'platform' | 'address'>) {
-  return `${person.name}${person.platform ? ` · ${person.platform === 'zoom' ? 'Zoom Team Chat' : person.platform} (${person.address})` : ''}`;
+  if (!person.platform) return person.name;
+  return `${person.name} · ${platformNames[person.platform]}${person.address ? ` (${person.address})` : ' (demo participant)'}`;
 }

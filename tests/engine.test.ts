@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Engine, lateness, type EngineDependencies } from '../server/engine.js';
 import { conservativeReply, groundInterpretation, mentionedTimes } from '../server/llm.js';
-import { SendFailure } from '../server/whatsapp.js';
+import { SendFailure } from '../server/transport.js';
 
 function harness(overrides: Partial<EngineDependencies> = {}) {
   let clock = 1_800_000_000_000;
@@ -37,11 +37,13 @@ test('expired and replaced Telegram approvals cannot send', async () => {
   assert.equal(h.sends(), 0);
 });
 
-test('replay never invokes the WhatsApp sender', async () => {
+test('replay never invokes the platform sender', async () => {
   const h = harness({ send: async () => { throw new Error('Real sender must never be called'); } });
   await h.engine.advance(); await h.engine.approve(h.engine.state.proposal!.id);
   assert.equal(h.engine.state.phase, 'waiting');
   assert.match(h.engine.state.proposal!.messageId!, /^replay-/);
+  assert.ok(h.notices.some(text => text.includes('demo participant')));
+  assert.ok(h.notices.every(text => !text.includes('undefined')));
 });
 
 test('unknown sender and silence cannot turn a proposal into agreement', async () => {
@@ -84,7 +86,7 @@ test('send timeout is uncertain and must not be retried', async () => {
   assert.throws(() => h.engine.reset(), /Finish monitoring/);
 });
 
-test('changed WhatsApp recipient list invalidates the approved recipient set', async () => {
+test('changed platform recipient list invalidates the approved recipient set', async () => {
   let changed = false;
   const h = harness({ destination: async () => ({ destinationId: 'chat', destinationName: 'Team', people: [{ id: changed ? 'stranger' : 'alex', name: 'Coworker' }] }) });
   h.engine.reset('live'); await h.engine.advance(); changed = true;
@@ -92,7 +94,7 @@ test('changed WhatsApp recipient list invalidates the approved recipient set', a
   assert.equal(h.sends(), 0); assert.equal(h.engine.state.phase, 'approval');
 });
 
-test('Telegram outage does not undo a successfully delivered WhatsApp proposal', async () => {
+test('Telegram outage does not undo a successfully delivered platform proposal', async () => {
   const h = harness({ notify: async () => { throw new Error('offline'); } });
   h.engine.reset('live'); await h.engine.advance(); await h.engine.approve(h.engine.state.proposal!.id);
   assert.equal(h.engine.state.phase, 'waiting'); assert.equal(h.sends(), 2);
@@ -137,12 +139,12 @@ test('model classifications are grounded in explicit consent and times actually 
 
 test('partial sends preserve successful receipts and never retry the batch', async () => {
   let attempts = 0;
-  const h = harness({ send: async () => { attempts++; if (attempts === 2) throw new SendFailure('Coworker must join the sandbox', true); return { id: 'first-message', createdDateTime: new Date().toISOString() }; } });
+  const h = harness({ send: async () => { attempts++; if (attempts === 2) throw new SendFailure('Coworker is not accessible', true); return { id: 'first-message', createdDateTime: new Date().toISOString() }; } });
   h.engine.reset('live'); await h.engine.advance(); const id = h.engine.state.proposal!.id;
-  await assert.rejects(h.engine.approve(id), /join the sandbox/);
+  await assert.rejects(h.engine.approve(id), /not accessible/);
   assert.equal(h.engine.state.phase, 'attention');
   assert.equal(h.engine.state.proposal!.people[0].messageId, 'first-message');
-  assert.equal(h.engine.state.proposal!.people[0].delivery, 'queued');
+  assert.equal(h.engine.state.proposal!.people[0].delivery, 'sent');
   assert.equal(h.engine.state.proposal!.people[1].delivery, 'failed');
   await assert.rejects(h.engine.approve(id)); assert.equal(attempts, 2);
 });
@@ -158,5 +160,5 @@ test('delivery receipts never count as coworker agreement and late status cannot
   assert.equal(h.engine.state.phase, 'waiting');
   await h.engine.deliveryStatus('message-2', 'undelivered', '63016');
   assert.equal(h.engine.state.phase, 'attention');
-  assert.match(h.engine.state.error!, /24-hour/);
+  assert.match(h.engine.state.error!, /delivery error/);
 });
