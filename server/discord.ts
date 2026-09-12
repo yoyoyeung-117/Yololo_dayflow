@@ -3,6 +3,9 @@ import type { Store } from './store.js';
 import { SendFailure, type Incoming } from './transport.js';
 
 export type DiscordMessage = { id: string; content: string; author: { id: string; bot?: boolean }; timestamp: string; message_reference?: { message_id?: string } };
+const MESSAGE_CONTENT = (1 << 18) | (1 << 19);
+const LIMITED_MESSAGE_CONTENT = 1 << 19;
+const EDITABLE_INTENTS = (1 << 13) | (1 << 15) | LIMITED_MESSAGE_CONTENT;
 export class Discord {
   connected = false;
   error: string | null = null;
@@ -14,10 +17,10 @@ export class Discord {
   constructor(private settings: () => Settings, private store: Store, private http: typeof fetch = fetch) { this.cursors = store.read('discord-cursors', {}); }
   get configured() { const s = this.settings(); return Boolean(s.discordToken && s.discordChannelId); }
   invalidate() { this.connected = false; this.error = null; this.botId = ''; this.channelName = null; }
-  private async api<T>(route: string, body?: object): Promise<T> {
+  private async api<T>(route: string, body?: object, method = body ? 'POST' : 'GET'): Promise<T> {
     if (Date.now() < this.cooldown) throw new SendFailure('Discord rate limit is cooling down. Wait before trying again.', true);
     let response: Response;
-    try { response = await this.http(`https://discord.com/api/v10${route}`, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bot ${this.settings().discordToken}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(12000) }); }
+    try { response = await this.http(`https://discord.com/api/v10${route}`, { method, headers: { Authorization: `Bot ${this.settings().discordToken}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(12000) }); }
     catch { throw new SendFailure('Discord did not confirm the request. Check the channel before sending again.', false); }
     const data = await response.json().catch(() => ({}));
     if (response.status === 429) this.cooldown = Date.now() + Math.max(1000, Math.min(300000, Number(data.retry_after) * 1000 || 10000));
@@ -32,6 +35,18 @@ export class Discord {
       const channel = await this.api<{ id: string; name: string; type: number; guild_id?: string }>(`/channels/${this.settings().discordChannelId}`);
       if (channel.type !== 0 || !channel.guild_id) throw new Error('Choose a regular text channel in your demo Discord server.');
       await this.api(`/channels/${channel.id}/messages?limit=1`);
+      // Discord also gates REST message content on this intent, including replies without a mention.
+      // https://docs.discord.com/developers/resources/application#edit-current-application
+      let application = await this.api<{ flags?: number }>('/applications/@me');
+      if (!Number.isInteger(application.flags)) throw new Error('Discord did not return its Message Content Intent settings. Reconnect to check again.');
+      if (!(application.flags! & MESSAGE_CONTENT)) {
+        try {
+          application = await this.api('/applications/@me', { flags: (application.flags! & EDITABLE_INTENTS) | LIMITED_MESSAGE_CONTENT }, 'PATCH');
+        } catch (error) {
+          throw new Error(`Could not enable replies without @bot mentions. Enable Message Content Intent in Discord Developer Portal → Bot (request Discord approval if required), then reconnect. ${(error as Error).message}`);
+        }
+        if (!Number.isInteger(application.flags) || !(application.flags! & MESSAGE_CONTENT)) throw new Error('Discord has not enabled Message Content Intent. Enable it in Developer Portal → Bot (request Discord approval if required), then reconnect so coworkers can reply without @bot mentions.');
+      }
       this.botId = me.id; this.botName = me.username; this.channelName = channel.name; this.connected = true; this.error = null;
     } catch (error) { this.connected = false; this.error = (error as Error).message; throw error; }
   }

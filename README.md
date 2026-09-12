@@ -35,9 +35,9 @@ Discord delivery uses a bot in one regular server text channel. It mentions each
 2. On **Bot**, copy/reset the **bot token**. Enable **Message Content Intent** so Dayflow can read normal replies.
 3. Under **Installation**, select **Guild Install**, add the `bot` scope, and grant **View Channels**, **Send Messages**, and **Read Message History**. Install the bot into a server you manage.
 4. In Discord, enable **User Settings → Advanced → Developer Mode**. Right-click your dedicated text channel and choose **Copy Channel ID**.
-5. In Dayflow **Connections → Discord**, enter the token and channel ID; click **Save & connect Discord**. This checks bot identity and channel history access without sending a message.
+5. In Dayflow **Connections → Discord**, enter the token and channel ID; click **Save & connect Discord**. This checks bot identity and channel history access, and enables Message Content Intent through Discord’s application API when available. If Discord requires approval for that intent, setup reports the required action. No channel message is sent.
 6. Add a coworker with platform **Discord**. Right-click that person in Discord, copy their **User ID**, paste it into their row, and save.
-7. After your approval, they receive a mention in that channel. They should reply directly to their proposal, or include the current reference, for example `#DF-ABC123 yes`.
+7. After your approval, they receive a mention in that channel. They can select **Reply** on their proposal and type `yes`, `no`, or an alternative time. **No @bot mention is needed, and the reply ping can be off.** A new message can instead include the current reference, for example `#DF-ABC123 yes`.
 
 The bot polls this channel approximately every six seconds while monitoring a live proposal. No public webhook or Discord Gateway connection is required. Use a quiet demo channel. Server permission overrides can still prevent sending; any error appears on that recipient instead of being reported as success.
 
@@ -146,7 +146,7 @@ ollama pull qwen3:4b
 | --- | --- |
 | Telegram stopped receiving | Use one running Dayflow process and a dedicated bot with no webhook. Click Check Telegram connection. |
 | Discord returns 403 | Check server/channel permission overrides, including history and send permissions. |
-| Discord replies are empty or ignored | Enable Message Content Intent; reply to the actual proposal or include its #DF reference. |
+| Discord replies are empty or ignored | Reconnect Discord so Dayflow checks/enables Message Content Intent. Use Reply on the actual proposal; no @bot mention or reply ping is needed. If Discord requires intent approval, complete that in Developer Portal → Bot. |
 | Zoom authorization fails | Check development credentials, exact redirect URL/allow list, scopes, and whether your organization requires app approval. |
 | Zoom token expires | Click Check Zoom connection; if renewal fails, authorize again. |
 | Zoom send/read returns 400 or 403 | Confirm the selected person is an existing Team Chat contact and the app has both read and write scopes. |

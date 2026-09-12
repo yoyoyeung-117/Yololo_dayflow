@@ -27,6 +27,8 @@ test('reply correlation rejects wrong people, platforms, old references, unsent 
   const event: Incoming = { platform: 'discord', sender: '555555555555555555', text: 'yes', quotedId: '101', messageId: '55:102', at: Date.now() };
   assert.equal(correlateReply(event, p)?.personId, 'a');
   assert.equal(correlateReply({ ...event, quotedId: undefined }, p), null);
+  assert.equal(correlateReply({ ...event, quotedId: p.people[1].messageId }, p), null);
+  assert.equal(correlateReply({ ...event, text: 'Could we do 2:15 pm?' }, p)?.text, 'Could we do 2:15 pm?');
   assert.equal(correlateReply({ ...event, text: '#DF-FFFF00 yes' }, p), null);
   assert.equal(correlateReply({ ...event, sender: '99' }, p), null);
   assert.equal(correlateReply({ ...event, platform: 'zoom' }, p), null);
@@ -57,9 +59,10 @@ test('Discord sends only the selected mention and binds replies to the configure
   const http = (async (input, init) => {
     const url = String(input); calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
     if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'Dayflow', bot: true });
+    if (url.endsWith('/applications/@me')) return json({ flags: 1 << 19 });
     if (url.endsWith('/channels/888888888888888888')) return json({ id: settings.discordChannelId, name: 'demo', type: 0, guild_id: 'server' });
     if (init?.method === 'POST') return json({ id: '900000000000000001', timestamp: new Date().toISOString() });
-    if (url.includes('after=')) return json([{ id: '900000000000000002', author: { id: p.people[1].address }, content: '#DF-ABC123 yes', timestamp: new Date().toISOString() }]);
+    if (url.includes('after=')) return json([{ id: '900000000000000002', author: { id: p.people[1].address }, content: 'yes', mentions: [], message_reference: { message_id: p.people[1].messageId }, timestamp: new Date().toISOString() }]);
     return json([]);
   }) as typeof fetch;
   const discord = new Discord(() => settings, f.store, http);
@@ -70,8 +73,65 @@ test('Discord sends only the selected mention and binds replies to the configure
     assert.deepEqual(send.body.allowed_mentions, { parse: [], users: [p.people[1].address], replied_user: false });
     const events: Incoming[] = []; await discord.poll(p, async event => { events.push(event); });
     assert.equal(events.length, 1); assert.equal(correlateReply(events[0], p)?.personId, 'b');
-    assert.ok(calls.every(call => call.url.includes('/users/@me') || call.url.includes(settings.discordChannelId)));
+    assert.equal(correlateReply(events[0], p)?.text, 'yes');
+    assert.ok(calls.every(call => call.url.includes('/users/@me') || call.url.includes('/applications/@me') || call.url.includes(settings.discordChannelId)));
   } finally { f.cleanup(); }
+});
+
+test('Discord enables unmentioned reply content and preserves existing editable intents', async () => {
+  const f = fixture(), calls: { method: string; body: any }[] = [];
+  const existing = (1 << 13) | (1 << 15) | (1 << 23);
+  const enabled = (1 << 13) | (1 << 15) | (1 << 19);
+  const discord = new Discord(() => ({ ...defaults(), discordToken: 'fake', discordChannelId: '888888888888888888' }), f.store, (async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'Dayflow', bot: true });
+    if (url.endsWith('/channels/888888888888888888')) return json({ id: '888888888888888888', name: 'demo', type: 0, guild_id: 'server' });
+    if (url.endsWith('/applications/@me')) {
+      calls.push({ method: init!.method!, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      return json({ flags: init?.method === 'PATCH' ? enabled : existing });
+    }
+    return json([]);
+  }) as typeof fetch);
+  try {
+    await discord.check();
+    assert.equal(discord.connected, true);
+    assert.deepEqual(calls, [{ method: 'GET', body: undefined }, { method: 'PATCH', body: { flags: enabled } }]);
+  } finally { f.cleanup(); }
+});
+
+test('Discord accepts either content intent flag without changing application settings', async () => {
+  for (const flags of [1 << 18, 1 << 19]) {
+    const f = fixture();
+    const discord = new Discord(() => ({ ...defaults(), discordToken: 'fake', discordChannelId: '888888888888888888' }), f.store, (async (input, init) => {
+      assert.equal(init?.method, 'GET');
+      const url = String(input);
+      if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'Dayflow', bot: true });
+      if (url.endsWith('/applications/@me')) return json({ flags });
+      if (url.endsWith('/channels/888888888888888888')) return json({ id: '888888888888888888', name: 'demo', type: 0, guild_id: 'server' });
+      return json([]);
+    }) as typeof fetch);
+    try { await discord.check(); assert.equal(discord.connected, true); }
+    finally { f.cleanup(); }
+  }
+});
+
+test('Discord does not report readiness when unmentioned reply content cannot be enabled', async () => {
+  for (const status of [200, 403, 429]) {
+    const f = fixture();
+    const discord = new Discord(() => ({ ...defaults(), discordToken: 'fake', discordChannelId: '888888888888888888' }), f.store, (async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/users/@me')) return json({ id: 'bot', username: 'Dayflow', bot: true });
+      if (url.endsWith('/applications/@me')) return json({ flags: 0 }, init?.method === 'PATCH' ? status : 200);
+      if (url.endsWith('/channels/888888888888888888')) return json({ id: '888888888888888888', name: 'demo', type: 0, guild_id: 'server' });
+      return json([]);
+    }) as typeof fetch);
+    try {
+      discord.connected = true;
+      await assert.rejects(discord.check(), /Message Content Intent/);
+      assert.equal(discord.connected, false);
+      assert.match(discord.error!, /reconnect/);
+    } finally { f.cleanup(); }
+  }
 });
 
 test('Discord rate limits stop sending without automatic retries', async () => {
@@ -142,7 +202,7 @@ test('owner approval routes coworker messages only to Discord and Zoom and repor
     assert.equal(sends.length, 0); assert.match(p.destinationName, /Discord \+ Zoom/);
     assert.equal(p.people.some(p => (p.platform as string) === 'telegram'), false);
     await service.engine.approve(p.id); assert.deepEqual(sends, ['discord:555555555555555555', 'discord:123456789012345678', 'zoom:sam@example.com']);
-    for (const person of p.people) await service.inbox.receive({ platform: person.platform!, sender: person.address!, text: `${p.code} yes`, messageId: person.id, at: Date.now() });
+    for (const person of p.people) await service.inbox.receive({ platform: person.platform!, sender: person.address!, text: person.platform === 'discord' ? 'yes' : `${p.code} yes`, quotedId: person.platform === 'discord' ? person.messageId : undefined, messageId: person.id, at: Date.now() });
     // Verify the incoming responses were persisted before model interpretation.
     assert.equal(f.store.read<any[]>('social-inbox', []).length, 3);
     await service.inbox.drain(); assert.equal(service.engine.state.phase, 'agreed');

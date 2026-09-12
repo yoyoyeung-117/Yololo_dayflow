@@ -90,7 +90,7 @@ export class Engine {
       const id = randomUUID(), code = `#DF-${id.slice(0, 6).toUpperCase()}`;
       const [hours, minutes] = time.split(':').map(Number), end = hours * 60 + minutes + 30;
       const endTime = `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
-      const text = `${draft.text} Would moving our 1:30 pm meeting to ${formatTime(time)}–${formatTime(endTime)} HKT work for everyone?\n\nPlease reply with ${code} and your answer (for example, “${code} yes” or “${code} could we do 2:15 pm?”).`;
+      const text = `${draft.text} Would moving our 1:30 pm meeting to ${formatTime(time)}–${formatTime(endTime)} HKT work for everyone?\n\nUse Reply on this message and type your answer (for example, “yes” or “could we do 2:15 pm?”). On Discord, no @bot mention is needed; you can turn the reply ping off. Or include ${code} in a new message.`;
       this.state.proposal = { id, code, time, endTime, text, createdAt: this.now(), expiresAt: this.now() + 10 * 60_000, destinationId: destination.destinationId, destinationName: destination.destinationName, people: destination.people.map(p => ({ ...p, status: 'pending' as const, delivery: 'not_sent' as const })), ai: draft.ai, aiNote: draft.note, mode: this.state.mode, transport: 'social' };
       this.state.phase = 'approval'; this.state.summary = null; this.state.processedMessages = [];
       this.log('A proposal is ready', `${formatTime(time)}–${formatTime(endTime)}. ${draft.ai ? 'Drafted with the local model.' : 'Template draft; model unavailable.'} Waiting for your approval.`);
