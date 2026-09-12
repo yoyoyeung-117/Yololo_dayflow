@@ -2,7 +2,7 @@
 
 Dayflow spots a likely delay, asks for your approval privately on **Telegram**, sends meeting proposals through **Discord and Zoom Team Chat**, collects replies, and reports back to you.
 
-**Open the app: http://localhost:4317 → Connections.**
+**Open the app: http://localhost:4317 → My calendar.**
 
 Your existing Telegram owner pairing and Ollama settings are retained. WhatsApp and Twilio have been removed. The open-weight model **Qwen3 4B** runs locally through Ollama.
 
@@ -79,9 +79,27 @@ Only checked participants receive requests. Connect all the platforms used by th
 
 - **Simulated messages:** seeded coworkers, no real coworker messages. If your owner Telegram account is paired, it may receive explicitly labelled replay approval cards and updates.
 - **Live messages:** real platform delivery and authenticated replies, after owner approval.
-- **Both modes:** lunch, calendar entries, location samples, and travel estimates are scenario replay data. No locked-phone tracking or calendar mutation is implemented. Meeting times refer to the scenario afternoon in **Hong Kong time (HKT)**.
+- **Practice scenario:** lunch, calendar entries, location samples and travel estimates are seeded data; it never edits Calendar. Meeting times use **Hong Kong time (HKT)**.
+- **My calendar:** reads actual events from Apple Calendar on this Mac and uses its current timezone. Complete, approved plans can update editable personal events after all selected friends accept. Calendar invitations stay fixed. There is no locked-phone location tracking.
 - Qwen drafts the opening and interprets replies; deterministic guards require affirmative evidence and actual mentioned times. When unavailable, conservative rules handle explicit yes/no and leave uncertain text for review.
 - A counterproposal requires a fresh owner approval. The current demo does not automatically discover everybody’s calendar availability.
+
+## Apple Calendar on Mac and iPhone
+
+1. Open **My calendar → Connect Apple Calendar** and allow **Full Access** for **Dayflow Calendar** if macOS asks. No Apple password or Microsoft registration is needed. If denied, enable it in System Settings → Privacy & Security → Calendars.
+2. Enable iCloud Calendar on your Mac and iPhone using the same Apple Account. Dayflow reads calendars already available on the Mac. Only iCloud-backed events sync to iPhone; “On My Mac” events stay local.
+3. Add your Discord friends in **Connections**, with each person's Discord user ID. On the calendar timeline, mark future personal events **Allow this event to move later**, then select the friends for that event. No selected friends means personal time and no social messages. Invitations, all-day events and read-only calendars stay fixed.
+4. Turn on **Check in on Telegram when an event ends**. Keep this Mac awake and Dayflow running. A Telegram check-in asks whether you're finished or need another 15/30 minutes. Monitoring starts when enabled; it does not send retrospective check-ins for earlier events.
+5. Or select a current/recently ended event on the dashboard, enter remaining extra minutes and a travel/transition buffer, then **Review the rest of my day**. The planner preserves durations, uses available gaps and shifts flexible appointments around fixed ones. Conflicts with fixed commitments or moves past midnight block approval.
+6. Review **every before/after time, friend and exact message**. Approve the full plan on Telegram or on the Mac. Real calendar plans always use real Discord/Zoom messages after approval; the practice scenario's simulation switch does not apply.
+7. Each affected meeting has a separate reference and reply inbox. All named friends must explicitly accept before any calendar save. A decline, unclear reply or counterproposal pauses the plan. Review replies, stop that plan and build a fresh one with new approval. No silent acceptance or automatic negotiation of unapproved times.
+8. Dayflow rereads the day before sending and before saving; intervening Calendar changes invalidate the plan. One batch updates only the selected event occurrences. The current overrun event's stored end time is not extended. The Mac reports confirmed saves privately on Telegram.
+
+**Five-minute rehearsal with real events:** in Apple Calendar, add a personal “Lunch demo” ending in one minute and a “Coffee demo” starting in about 15 minutes. Put Coffee in an editable iCloud calendar, without Apple invitees. Refresh Dayflow, mark Coffee flexible, and select your Discord friend. Enable check-ins, wait for Lunch to end, and tap **Need 30 more min** on Telegram. Review and approve the resulting message; your friend replies with its `#DF-… yes` reference. Verify Coffee moves in Calendar and syncs to iPhone. Delete your demo events afterward in Calendar. No rehearsal events are created automatically.
+
+An existing active practice conversation must be finished before a Calendar plan can send. **Stop this plan** stops monitoring but does not retract already sent messages. Approvals expire after ten minutes; coordination stops after thirty minutes or when a proposed time passes. Restart during coordination pauses for review. A restart or error during Calendar saving is treated as uncertain: inspect Calendar before trying again; the app never retries writes automatically.
+
+The schedule planner is deterministic. The local open model interprets friend replies with the existing evidence checks; it cannot select recipients or authorize calendar writes. All-day entries are displayed but excluded from timed travel calculations. Dayflow cannot read your friends' private calendars, estimate live traffic or detect an actual overrun from Calendar alone.
 
 ## Reliability and approval behavior
 
@@ -104,6 +122,7 @@ Requirements: Node.js 22.12+ or 24, npm, and Ollama. cloudflared is needed only 
 ```bash
 cd /Users/yeungyingyau/Developer/dayflow
 npm install
+npm run calendar:build
 npm run build
 npm run launch
 ```
@@ -140,6 +159,11 @@ ollama pull qwen3:4b
 src/App.tsx             Dashboard, approval and shared response list
 src/Connections.tsx     Platform setup, Discord/Zoom participant routing
 shared/types.ts         Coworkers, platforms, proposals and delivery state
+native/CalendarBridge.swift  Native EventKit permission/read/write helper
+server/calendar-bridge.ts   Private local helper IPC
+server/day-planner.ts       Whole-day scheduling constraints
+server/calendar.ts          Check-ins, plan approval and calendar commit
+src/CalendarWorkspace.tsx   Real calendar timeline and complete plan review
 server/app.ts           Local API, transport routing, isolated OAuth callback
 server/engine.ts        Delay detection, approval and response transitions
 server/telegram.ts      Private owner pairing, approvals and bot polling
@@ -175,3 +199,5 @@ Tests use isolated data and mocked provider HTTP responses, covering approval ga
 - [Zoom user OAuth](https://developers.zoom.us/docs/integrations/oauth/)
 - [Zoom Team Chat API](https://developers.zoom.us/docs/api/chat/)
 - [Ollama chat API](https://docs.ollama.com/api/chat)
+
+Apple integration references: [EventKit access](https://developer.apple.com/documentation/eventkit/accessing-the-event-store), [iCloud Calendar setup](https://support.apple.com/en-gb/guide/icloud/mm15eb200ab4/icloud).

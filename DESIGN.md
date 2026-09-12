@@ -12,7 +12,7 @@
 ## Product goals
 - Complete detect → approve → coworker proposal → collect replies → report loop.
 - Demonstrate the workflow in 90 seconds with labelled scenario replay.
-- Non-goals: native background tracking, automatic calendar mutation, multi-user hosting.
+- Non-goals: native background tracking, unapproved calendar mutation, multi-user hosting.
 - Success: real coworker send only after approval; no acceptance inferred from silence.
 
 ## Personas and jobs
@@ -54,7 +54,7 @@
 - Success: show actual recipients and replies. Offline: flag polling failure; never invent delivery or acceptance.
 
 ## Content voice
-- Plain English. “Propose” until everyone agrees; never claim the calendar was updated.
+- Plain English. “Propose” until everyone agrees; claim Calendar was updated only when the Apple Calendar helper returns save receipts.
 - “Scenario replay” for seeded time/location. “Live messages” for real transport; “Simulated messages” for replay. Display HKT explicitly.
 
 ## Implementation constraints
@@ -74,3 +74,12 @@
 - A platform receipt means sent, not read or agreed. Stop on partial send failure or uncertainty and preserve successful receipts.
 - Telegram and Discord need no public ingress. Zoom’s temporary connection is for OAuth authorization only; replies use REST polling.
 - Setup uses platform tabs and a shared participant list. Only included participants affect readiness.
+
+## Apple Calendar workspace
+- My calendar is the default workspace; Practice scenario keeps seeded inputs in a separate view.
+- Use the existing cream cards, evergreen primary actions, restrained lime accents, rounded controls and responsive grid.
+- Connect Apple Calendar with a local EventKit helper. Display real dates/timezone, last successful refresh, permission errors, and the empty-day state.
+- Default events to fixed. Explicitly mark editable personal events flexible and map their friends from Connections; invited, all-day and read-only events cannot be moved.
+- Show the entire day, a remaining-time input, transition buffer and before/after plan. Show exact message text, recipients and destination before approval.
+- Calendar changes happen only after the owner approves the complete plan and all named friends agree. Show actual calendar receipts as success; preserve blocked/uncertain states.
+- Monitoring means an end-of-event Telegram check-in while this Mac runs. Do not claim background iPhone location detection. iCloud calendars sync through Apple; local calendars stay on this Mac.

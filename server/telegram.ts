@@ -43,6 +43,12 @@ export class Telegram {
     const keyboard = proposal ? { inline_keyboard: [[{ text: proposal.mode === 'live' ? 'Approve & send to coworkers' : 'Approve replay', callback_data: `approve:${proposal.id}` }], [{ text: 'Try 2:00 pm', callback_data: `time:${proposal.id}:14:00` }, { text: 'Try 2:15 pm', callback_data: `time:${proposal.id}:14:15` }, { text: 'Try 2:30 pm', callback_data: `time:${proposal.id}:14:30` }], [{ text: 'Dismiss', callback_data: `dismiss:${proposal.id}` }]] } : undefined;
     await this.api('sendMessage', { chat_id: settings.telegramOwnerChatId, text: text.slice(0, 4096), ...(keyboard ? { reply_markup: keyboard } : {}) });
   }
+  async sendButtons(text: string, buttons: { text: string; callback_data: string }[][] = []) {
+    const settings = this.settings();
+    if (!settings.telegramOwnerChatId || !this.connected) throw new Error('Connect and pair Telegram first.');
+    if (text.length > 4096) throw new Error('This plan is too long for Telegram. Review and approve the complete plan on your Mac.');
+    await this.api('sendMessage', { chat_id: settings.telegramOwnerChatId, text, ...(buttons.length ? { reply_markup: { inline_keyboard: buttons } } : {}) });
+  }
   stop() { this.stopped = true; this.connected = false; this.controller.abort(); }
   start() {
     this.stopped = false;

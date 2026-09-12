@@ -10,6 +10,8 @@ import { Zoom } from './zoom.js';
 import { ReplyInbox } from './inbox.js';
 import { ReplyTunnel } from './tunnel.js';
 import { Telegram } from './telegram.js';
+import { CalendarAgent } from './calendar.js';
+import { AppleCalendar } from './calendar-bridge.js';
 import { recipientLabel } from './transport.js';
 import { platformNames, type Coworker, type Settings, type State } from '../shared/types.js';
 
@@ -38,9 +40,12 @@ export function createApp(directory = path.resolve('.local')) {
   const model = new LocalModel(getSettings), discord = new Discord(getSettings, store), zoom = new Zoom(getSettings, store);
   const webhookPort = Number(process.env.WEBHOOK_PORT || 4319);
   const tunnel = new ReplyTunnel(webhookPort, url => { settings.zoomRedirectBaseUrl = url; store.write('settings', settings); });
-  const activeDelivery = () => engine.state.mode === 'live' && ['preparing', 'sending', 'waiting', 'attention', 'uncertain'].includes(engine.state.phase);
+  const activeDelivery = () => calendar?.active || engine.state.mode === 'live' && ['preparing', 'sending', 'waiting', 'attention', 'uncertain'].includes(engine.state.phase);
   let engine: Engine, inbox: ReplyInbox;
+  let calendar: CalendarAgent;
   const makeTelegram = () => new Telegram(getSettings, id => { settings.telegramOwnerChatId = id; store.write('settings', settings); }, store, async (action, id, value) => {
+    if (action.startsWith('day')) return calendar.action(action, id, value);
+    if (calendar.active) throw new Error('Finish the active calendar plan in My calendar first.');
     if (action === 'approve') await engine.approve(id);
     else if (action === 'dismiss') engine.dismiss(id);
     else if (action === 'time') {
@@ -57,9 +62,10 @@ export function createApp(directory = path.resolve('.local')) {
     return zoom.connected ? '' : 'Authorize your Zoom account';
   };
   const ownerReady = () => telegram.connected && Boolean(settings.telegramOwnerChatId);
-  const destination = async () => {
+  const destination = async (personIds?: string[]) => {
     if (!ownerReady()) throw new Error('Connect and pair Telegram for your private approvals first.');
-    const people = settings.coworkers.filter(p => p.enabled);
+    const people = settings.coworkers.filter(p => p.enabled && (!personIds || personIds.includes(p.id)));
+    if (personIds && people.length !== new Set(personIds).size) throw new Error('A selected friend is missing or disabled. Update the event’s people first.');
     if (!people.length) throw new Error('Add and enable at least one coworker in Connections.');
     for (const person of people) {
       const reason = readiness(person); if (reason) throw new Error(`${person.name}: ${reason}.`);
@@ -82,6 +88,11 @@ export function createApp(directory = path.resolve('.local')) {
     notify: (text, proposal) => telegram.send(text, proposal),
   }, savedState);
   inbox = new ReplyInbox(engine, store);
+  calendar = new CalendarAgent(store, new AppleCalendar(directory), {
+    opening: () => model.opening(), interpret: (text, time) => model.interpret(text, time), destination,
+    send: (person, proposal) => person.platform === 'discord' ? discord.sendProposal(person, proposal) : zoom.sendProposal(person, proposal),
+    notify: text => telegram.sendButtons(text),
+  }, (text, buttons) => telegram.sendButtons(text, buttons), () => engine.state.mode === 'live' && ['approval', 'preparing', 'sending', 'waiting', 'attention', 'uncertain'].includes(engine.state.phase));
   const app = express(); app.disable('x-powered-by');
   app.use((req, res, next) => {
     const host = req.headers.host || '';
@@ -140,6 +151,20 @@ export function createApp(directory = path.resolve('.local')) {
   });
   app.post('/api/zoom/connect', async (_req, res) => { await zoom.check(); for (const p of settings.coworkers.filter(p => p.platform === 'zoom' && p.enabled && p.address)) await zoom.checkContact(p.address); res.json({ ok: true }); });
   app.post('/api/llm/check', async (_req, res) => { res.json(await model.check()); });
+  app.get('/api/calendar/state', (_req, res) => res.json(calendar.state));
+  app.post('/api/calendar/connect', async (_req, res) => { await calendar.refresh(true); res.json(calendar.state); });
+  app.post('/api/calendar/refresh', async (_req, res) => { await calendar.refresh(); res.json(calendar.state); });
+  app.post('/api/calendar/monitor', (req, res) => { calendar.configure(z.boolean().parse(req.body.enabled)); res.json({ ok: true }); });
+  app.post('/api/calendar/rule', (req, res) => {
+    const input = z.object({ eventId: z.string().min(1).max(1000), flexible: z.boolean(), personIds: z.array(z.uuid()).max(8) }).strict().parse(req.body);
+    if (new Set(input.personIds).size !== input.personIds.length || input.personIds.some(id => !settings.coworkers.some(p => p.id === id && p.enabled))) throw new Error('Select enabled friends from Connections.');
+    calendar.rule(input.eventId, { flexible: input.flexible, personIds: input.personIds }); res.json({ ok: true });
+  });
+  app.post('/api/calendar/preview', async (req, res) => { const input = z.object({ eventId: z.string().min(1).max(1000), extraMinutes: z.number().int().min(5).max(120), bufferMinutes: z.number().int().min(0).max(60) }).strict().parse(req.body); await calendar.preview(input.eventId, input.extraMinutes, input.bufferMinutes); res.json(calendar.state); });
+  app.post('/api/calendar/approve', async (req, res) => { await calendar.approve(z.uuid().parse(req.body.id)); res.json(calendar.state); });
+  app.post('/api/calendar/dismiss', (req, res) => { calendar.dismiss(z.uuid().parse(req.body.id)); res.json(calendar.state); });
+  app.post('/api/calendar/notify', async (_req, res) => { await calendar.notifyPlan(); res.json({ ok: true }); });
+  app.use(['/api/replay', '/api/proposal'], (_req, _res, next) => { if (calendar.active) throw new Error('Finish or stop the active calendar plan in My calendar first.'); next(); });
   app.post('/api/replay/reset', (req, res) => { engine.reset(z.enum(['replay', 'live']).parse(req.body.mode)); res.json({ ok: true }); });
   app.post('/api/replay/advance', async (_req, res) => { await engine.advance(); res.json({ ok: true }); });
   app.post('/api/proposal/prepare', async (req, res) => { await engine.prepare(z.string().parse(req.body.time)); res.json({ ok: true }); });
@@ -187,6 +212,13 @@ export function createApp(directory = path.resolve('.local')) {
         const results = await Promise.allSettled([discord.poll(p, receive), zoom.poll(p, receive)]);
         for (const result of results) if (result.status === 'rejected') engine.state.error = 'A platform could not check replies. See Connections for its status.';
       }
+      if (calendar.state.plan && ['coordinating', 'attention'].includes(calendar.state.plan.status)) {
+        for (const { engine: conversation, inbox: calendarInbox } of calendar.conversations) {
+          const proposal = conversation.state.proposal;
+          if (!proposal?.approvedAt) continue;
+          await Promise.allSettled([discord.poll(proposal, event => calendarInbox.receive(event)), zoom.poll(proposal, event => calendarInbox.receive(event))]);
+        }
+      }
     } finally { polling = false; }
   };
   const start = () => {
@@ -196,8 +228,9 @@ export function createApp(directory = path.resolve('.local')) {
     if (settings.telegramToken && settings.telegramOwnerChatId) void telegram.connect().catch(() => {});
     const replyTimer = setInterval(() => void poll(), 6000); replyTimer.unref();
     const inboxTimer = setInterval(() => void inbox.drain().catch(() => { engine.state.error = 'A reply remains queued. Check local storage, then restart Dayflow.'; }), 500); inboxTimer.unref();
+    const calendarTimer = setInterval(() => void calendar.tick().catch(() => {}), 3000); calendarTimer.unref();
     const modelTimer = setInterval(() => void model.check(), 30000); modelTimer.unref();
-    return () => { clearInterval(modelTimer); clearInterval(replyTimer); clearInterval(inboxTimer); telegram.stop(); tunnel.stop(); };
+    return () => { clearInterval(calendarTimer); clearInterval(modelTimer); clearInterval(replyTimer); clearInterval(inboxTimer); telegram.stop(); tunnel.stop(); };
   };
-  return { app, webhookApp, webhookPort, engine, model, telegram, discord, zoom, inbox, poll, tunnel, start };
+  return { app, webhookApp, webhookPort, engine, model, telegram, discord, zoom, inbox, poll, tunnel, calendar, start };
 }

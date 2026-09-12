@@ -4,7 +4,7 @@ test.beforeEach(async ({ request }) => { await request.post('/api/replay/reset',
 
 test('complete replay with actual UI actions, stale approval prevention, and recorded agreement', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  await page.goto('/');
+  await page.goto('/?view=demo');
   await expect(page.getByRole('heading', { name: 'A little room in your day.' })).toBeVisible();
   await page.screenshot({ path: 'test-results/dayflow-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Advance to 1:15 pm' }).click();
@@ -29,7 +29,7 @@ test('complete replay with actual UI actions, stale approval prevention, and rec
 });
 
 test('live delivery requires coworker setup and settings are keyboard accessible', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=demo');
   await expect(page.getByLabel('Message delivery status')).toContainText('Approvals will not post to Discord or Zoom');
   await page.getByRole('button', { name: 'Switch to live messages', exact: true }).click();
   await expect(page.getByLabel('Message delivery status')).toContainText('No coworkers are selected');
@@ -44,7 +44,7 @@ test('live delivery requires coworker setup and settings are keyboard accessible
 
 test('mobile layout has no horizontal overflow and approval remains usable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/?view=demo');
   await page.getByRole('button', { name: 'Advance to 1:15 pm' }).click();
   await expect(page.getByRole('button', { name: 'Approve replay proposal' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -53,7 +53,7 @@ test('mobile layout has no horizontal overflow and approval remains usable', asy
 
 test('all three setup panels and participant platform choices work and persist', async ({ page, request }) => {
   await request.post('/api/settings', { data: { coworkers: [] } });
-  await page.goto('/');
+  await page.goto('/?view=demo');
   await page.getByRole('button', { name: 'Discord You ↔ coworkers · team channel Set up' }).click();
   await expect(page.getByRole('tab', { name: 'Discord', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByLabel('Discord bot token')).toBeVisible();

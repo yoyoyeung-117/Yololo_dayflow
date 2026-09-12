@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, ArrowDown, ArrowRight, ArrowUpRight, Bell, CalendarDays, Check, CheckCheck, ChevronRight, CircleHelp, Clock3, Coffee, Copy, ExternalLink, Leaf, LoaderCircle, MapPin, MessageCircle, Navigation, Play, Plug, RotateCcw, Send, Settings2, ShieldCheck, Sparkles, Users, X } from 'lucide-react';
 import { platformNames, type Mode, type Person, type Snapshot, type Platform } from '../shared/types';
+import { CalendarWorkspace } from './CalendarWorkspace';
 import { Connections } from './Connections';
 import { request } from './api';
 
@@ -28,6 +29,7 @@ function RouteMap() {
 }
 
 export function App() {
+  const [view, setView] = useState(new URLSearchParams(window.location.search).get('view') === 'demo' ? 'demo' : 'calendar');
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [offline, setOffline] = useState(false);
   const [connections, setConnections] = useState(false);
@@ -65,7 +67,8 @@ export function App() {
       <Brand />
       <div className="workspace-label">YOUR PERSONAL COORDINATOR</div>
       <nav aria-label="Main navigation">
-        <button className="nav-item active" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><CalendarDays size={19} /> My day <span className="nav-count">2</span></button>
+        <button className={`nav-item ${view === 'calendar' ? 'active' : ''}`} onClick={() => setView('calendar')}><CalendarDays size={19} /> My calendar</button>
+        <button className={`nav-item ${view === 'demo' ? 'active' : ''}`} onClick={() => setView('demo')}><Play size={19} /> Practice scenario</button>
         <button className="nav-item" onClick={() => setConnections(true)}><Plug size={19} /> Connections <span className={`connection-dot ${integrations.telegram.connected ? 'connected' : ''}`} /></button>
         <button className="nav-item" onClick={() => document.getElementById('activity')?.scrollIntoView({ behavior: 'smooth' })}><Activity size={19} /> Activity</button>
       </nav>
@@ -75,8 +78,8 @@ export function App() {
     </aside>
 
     <main>
-      <header className="topbar"><div><span className="breadcrumb">Workspace</span><ChevronRight size={13} /><span>My day</span></div><div className="topbar-right"><span className="local-badge"><span /> Local & private</span><button className="icon-button" aria-label="Open connections" onClick={() => setConnections(true)}><Settings2 size={18} /></button></div></header>
-      <div className="workspace">
+      <header className="topbar"><div><span className="breadcrumb">Workspace</span><ChevronRight size={13} /><span>{view === 'calendar' ? 'My calendar' : 'Practice scenario'}</span></div><div className="topbar-right"><span className="local-badge"><span /> Local & private</span><button className="icon-button" aria-label="Open connections" onClick={() => setConnections(true)}><Settings2 size={18} /></button></div></header>
+      {view === 'calendar' ? <CalendarWorkspace snapshot={snapshot} connections={openCoworkers} practice={() => setView('demo')} /> : <div className="workspace">
         <div className="page-heading"><div><div className="eyebrow">A LITTLE AHEAD, SO YOU DON’T HAVE TO BE</div><h1>{phaseTitles[state.phase]}</h1><p>Your private agent on Telegram. Your coworkers on Discord and Zoom.</p></div><span className="date-badge"><CalendarDays size={16} /> Lunch-overrun scenario</span></div>
 
         <section className="demo-bar" aria-label="Demo controls"><div className="demo-label"><span className="replay-dot" /><strong>Scenario replay</strong><span className="desktop-only">Seeded calendar & location</span></div><div className="demo-actions"><div className="mode-toggle" role="group" aria-label="Message delivery mode"><button className={!isLive ? 'selected' : ''} disabled={!!busy} onClick={() => void changeMode('replay')}>Simulated messages</button><button className={isLive ? 'selected live' : ''} disabled={!!busy} onClick={() => void changeMode('live')}>Live messages</button></div><button className="icon-button" title="Reset scenario" aria-label="Reset scenario" disabled={!!busy || (isLive && ['waiting', 'attention', 'uncertain'].includes(state.phase))} onClick={() => void act('reset', '/api/replay/reset', { mode: state.mode })}><RotateCcw size={16} /></button></div></section>
@@ -139,7 +142,7 @@ export function App() {
           </div>
         </div>
         <footer className="workspace-footer"><Brand small /><span>Less coordinating. More being here.</span><span><span className={`connection-dot ${integrations.llm.available ? 'connected' : ''}`} />{integrations.llm.available ? 'Open model running locally' : 'Rules-only fallback available'}</span></footer>
-      </div>
+      </div>}
     </main>
     {connections && <Connections initialTab={connectionTab} snapshot={snapshot} refresh={refresh} close={() => setConnections(false)} />}
   </div>;

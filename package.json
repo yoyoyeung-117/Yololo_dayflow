@@ -10,7 +10,8 @@
     "launch": "node scripts/launch.mjs",
     "test": "tsx --test tests/*.test.ts",
     "test:llm": "tsx scripts/check-model.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "calendar:build": "node scripts/build-calendar.mjs"
   },
   "dependencies": {
     "dotenv": "^17.2.0",

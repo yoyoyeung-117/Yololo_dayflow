@@ -8,6 +8,7 @@ export type ReplyStatus = 'pending' | 'accepted' | 'declined' | 'counterproposal
 export type Delivery = 'not_sent' | 'sending' | 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'uncertain';
 export type Person = { id: string; name: string; platform?: CoworkerPlatform; address?: string; status: ReplyStatus; text?: string; proposedTime?: string; messageId?: string; delivery?: Delivery; deliveryError?: string };
 export type Proposal = {
+  calendarPlanId?: string;
   id: string; code: string; time: string; endTime: string; text: string;
   createdAt: number; expiresAt: number; approvedAt?: number; sentAt?: number;
   messageId?: string; destinationId?: string; destinationName: string; people: Person[];

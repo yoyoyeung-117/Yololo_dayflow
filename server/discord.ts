@@ -10,8 +10,8 @@ export class Discord {
   botName: string | null = null;
   channelName: string | null = null;
   private cooldown = 0;
-  private cursor: { proposalId: string; after: string };
-  constructor(private settings: () => Settings, private store: Store, private http: typeof fetch = fetch) { this.cursor = store.read('discord-cursor', { proposalId: '', after: '' }); }
+  private cursors: Record<string, string>;
+  constructor(private settings: () => Settings, private store: Store, private http: typeof fetch = fetch) { this.cursors = store.read('discord-cursors', {}); }
   get configured() { const s = this.settings(); return Boolean(s.discordToken && s.discordChannelId); }
   invalidate() { this.connected = false; this.error = null; this.botId = ''; this.channelName = null; }
   private async api<T>(route: string, body?: object): Promise<T> {
@@ -45,15 +45,15 @@ export class Discord {
     if (!this.connected || Date.now() < this.cooldown) return;
     const receipts = proposal.people.filter(p => p.platform === 'discord' && p.messageId).map(p => p.messageId!).filter(id => /^\d+$/.test(id));
     if (!receipts.length) return;
-    if (this.cursor.proposalId !== proposal.id) this.cursor = { proposalId: proposal.id, after: receipts.reduce((a, b) => BigInt(a) < BigInt(b) ? a : b) };
+    this.cursors[proposal.id] ||= receipts.reduce((a, b) => BigInt(a) < BigInt(b) ? a : b);
     try {
       for (let page = 0; page < 5; page++) {
-        const messages = await this.api<DiscordMessage[]>(`/channels/${this.settings().discordChannelId}/messages?limit=100&after=${this.cursor.after}`);
+        const messages = await this.api<DiscordMessage[]>(`/channels/${this.settings().discordChannelId}/messages?limit=100&after=${this.cursors[proposal.id]}`);
         if (!Array.isArray(messages)) throw new Error('Discord returned an unexpected message list.');
         messages.sort((a, b) => BigInt(a.id) < BigInt(b.id) ? -1 : 1);
         for (const message of messages) {
           if (!message.author.bot) await receive({ platform: 'discord', sender: message.author.id, text: message.content || '', messageId: message.id, quotedId: message.message_reference?.message_id, at: Date.parse(message.timestamp) });
-          this.cursor.after = message.id; this.store.write('discord-cursor', this.cursor);
+          this.cursors[proposal.id] = message.id; this.store.write('discord-cursors', this.cursors);
         }
         this.error = null;
         if (messages.length < 100) break;

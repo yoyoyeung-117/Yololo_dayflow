@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 import type { Delivery, Mode, Person, Proposal, State } from '../shared/types.js';
 import { SendFailure, recipientLabel, type Receipt } from './transport.js';
 import type { Interpretation } from './llm.js';
+import { calendarTime, calendarRange, type CalendarChange, type DayPlan } from '../shared/calendar.js';
 import { initialState } from './store.js';
 
 export interface EngineDependencies {
   save: (state: State) => void;
   opening: () => Promise<{ text: string; ai: boolean; note?: string }>;
   interpret: (text: string, time: string) => Promise<Interpretation & { ai: boolean }>;
-  destination: () => Promise<{ destinationId: string; destinationName: string; people: Pick<Person, 'id' | 'name' | 'platform' | 'address'>[] }>;
+  destination: (personIds?: string[]) => Promise<{ destinationId: string; destinationName: string; people: Pick<Person, 'id' | 'name' | 'platform' | 'address'>[] }>;
   send: (person: Person, proposal: Proposal) => Promise<Receipt>;
   notify: (text: string, proposal?: Proposal) => Promise<void>;
   now?: () => number;
@@ -96,6 +97,16 @@ export class Engine {
       await this.notify(`Dayflow · ${this.state.mode === 'replay' ? 'SCENARIO REPLAY — no coworker message will be sent' : 'LIVE MEETING PROPOSAL'}\n\nYou appear to still be at lunch. Your meeting begins in 15 min, but travel and buffer take 25 min.\n\nPropose ${formatTime(time)}–${formatTime(endTime)} to ${destination.people.map(recipientLabel).join(', ')} in ${destination.destinationName}?\n\n${text}\n\nApproval expires in 10 minutes.`, this.state.proposal);
     } catch (error) { this.state.phase = oldPhase; this.state.error = (error as Error).message; this.persist(); throw error; }
   }
+  async prepareCalendar(plan: DayPlan, change: CalendarChange) {
+    if (this.state.phase !== 'observing') throw new Error('This calendar conversation has already been prepared.');
+    const destination = await this.deps.destination(change.personIds);
+    const id = randomUUID(), code = `#DF-${id.slice(0, 6).toUpperCase()}`;
+    const time = calendarTime(change.start, plan.timezone), endTime = calendarTime(change.end, plan.timezone);
+    const text = `I’m running behind. Could we move “${change.event.title.slice(0, 140)}” on ${plan.day} from ${calendarRange(change.event.start, change.event.end, plan.timezone)} to ${calendarRange(change.start, change.end, plan.timezone)} (${plan.timezone})?\n\nPlease reply with ${code} and your answer, for example “${code} yes”. A different time needs another review.`;
+    this.state.mode = 'live'; this.state.phase = 'approval';
+    this.state.proposal = { id, code, time, endTime, text, calendarPlanId: plan.id, createdAt: this.now(), expiresAt: plan.expiresAt, destinationId: destination.destinationId, destinationName: destination.destinationName, people: destination.people.map(p => ({ ...p, status: 'pending', delivery: 'not_sent' })), ai: false, mode: 'live', transport: 'social' };
+    this.persist();
+  }
   async approve(id: string) {
     const proposal = this.state.proposal;
     if (!proposal || proposal.id !== id || this.state.phase !== 'approval') throw new Error('This approval is no longer active. Open the latest proposal.');
@@ -104,7 +115,7 @@ export class Engine {
     this.state.phase = 'sending'; proposal.approvedAt = this.now(); this.state.error = null; this.persist();
     if (proposal.mode === 'live') {
       try {
-        const current = await this.deps.destination();
+        const current = await this.deps.destination(proposal.calendarPlanId ? proposal.people.map(p => p.id) : undefined);
         const ids = (people: Person[] | Pick<Person, 'id' | 'name' | 'platform' | 'address'>[]) => people.map(p => `${p.id}:${p.name}:${p.platform}:${p.address}`).sort().join(',');
         if (current.destinationId !== proposal.destinationId || ids(current.people) !== ids(proposal.people)) throw new Error('Recipient list or sender changed. Prepare a fresh proposal before sending.');
       } catch (error) { this.state.phase = 'approval'; this.state.error = (error as Error).message; this.persist(); throw error; }
