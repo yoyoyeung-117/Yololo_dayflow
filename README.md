@@ -152,7 +152,7 @@ Alternative slots are checked against the real Apple Calendar on this Mac. The p
 Requirements: Node.js 22.12+ or 24, npm, and Ollama. cloudflared is needed only for the built-in Zoom authorization connection. These tools are already installed on this computer.
 
 ```bash
-cd /Users/yeungyingyau/Developer/dayflow
+cd /Users/user_name/Developer/dayflow
 npm install
 npm run calendar:build
 npm run build
